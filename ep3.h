@@ -5,3 +5,4 @@
 #include <readline/history.h>
 
 char* displayPrompt();
+int process_command(char* args[]);
