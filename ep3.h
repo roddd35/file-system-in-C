@@ -5,4 +5,5 @@
 #include <readline/history.h>
 
 char* displayPrompt();
-int process_command(char* args[]);
+int process_command(char* args[], int qtdParametros);
+int nomeValido(char* nomeArquivo);
