@@ -12,21 +12,20 @@
 
 typedef struct{
     int bytesSize;  /* diretorios nao tem esse atributo */
+    int isDirectory;
+    int nextBlock;
+    int currentBlock;
     char fileName[FILENAME_LENGTH];
     char creationTime[20];
     char modificationTime[20];
     char acessTime[20];
-}FileS;
-
-typedef struct{
-    int nextBlock;
-    int currentBlock;
-    char fileName[FILENAME_LENGTH];
-}FATEntry;
+}FileInfo;
 
 char* displayPrompt();
-void initializeFileSystem();
-int validName(char* fileName);
+int find_free_FAT_position();
+int find_free_bitmap_position();
+int fileExists(char* filename);
+int create_file(char* filename, int isDir);
 int process_command(char* args[], int total_parameters);
-int find_free_file_entry();
+void initializeFileSystem();
 void get_current_date_time(char* buffer, size_t size);
