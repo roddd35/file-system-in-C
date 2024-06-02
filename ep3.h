@@ -11,10 +11,11 @@
 #define TOTAL_BLOCKS 25600
 
 typedef struct{
+    int fat_block;
+    int bitmap_block;
     int bytesSize;  /* diretorios nao tem esse atributo */
-    int isDirectory;
-    int nextBlock;
-    int currentBlock;
+    int total_blocks;
+    int is_directory;
     char fileName[FILENAME_LENGTH];
     char creationTime[20];
     char modificationTime[20];
