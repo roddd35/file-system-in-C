@@ -9,11 +9,19 @@
  * analogamente, 4KB * 3200bytes * 8 bits = 102400KB
  */
 
-int isSystemMounted = 0;
-int total_files = 0;
-int files_list_capacity;
+/* 
+ * bytesSize / 4096 retorna o numero de blocos desse arquivo 
+ * quando esse valor for maior que o total_blocks, criar um 
+ * novo bloco na FAT e armazenar o conteudo extra lá
+ * a cada 8 posições na FAT, alocar uma nova no bitmap
+ */
 
-FileInfo* filesList;
+
+int isSystemMounted = 0;
+int total_dirs = 0;
+int dir_tree_capacity;
+
+FileInfo** dirTree;
 unsigned char bitmap[TOTAL_BLOCKS / 8];
 int fat[TOTAL_BLOCKS];
 
@@ -23,8 +31,8 @@ int main(){
     char* command;
     char* args[10];
 
-    filesList = (FileInfo*)malloc(sizeof(FileInfo) * 1);
-    files_list_capacity = 1;
+    dirTree = (FileInfo**)malloc(sizeof(FileInfo*) * 1);
+    dir_tree_capacity = 1;
 
     while(1){
         /* ler comando */
@@ -48,7 +56,9 @@ int main(){
 
     free(args);
     free(command);
-    free(filesList);
+    for(i = 0; i < total_dirs; i++)
+        free(dirTree[i]);
+    free(dirTree);
 
     return 0;
 }
@@ -60,6 +70,7 @@ char* displayPrompt(){
 
 /* processar o comando que o usuário informou */
 int process_command(char* args[], int total_parameters){
+    int i;
     /* criar ou carregar um sistema de arquivos */
     if(strcmp(args[0], "monta") == 0){
         /* criar um sistema de arquivos */
@@ -80,24 +91,29 @@ int process_command(char* args[], int total_parameters){
     if(isSystemMounted){
         /* criar um arquivo ou acessar um arquivo */
         if(strcmp(args[0], "toca") == 0){
-            int index = fileExists(args[1]);
-
+            int index = fileExists(args[1], 0);
             /* arquivo nao existe, criar um novo */
+            
             if(index == -1){
                 if(create_file(args[1], 0))
                     printf("Arquivo criado!\n");
             }
             /* arquivo existe, modificar seu ultimo acesso */
-            else
-                get_current_date_time(filesList[index].acessTime, sizeof(filesList[index].acessTime));
-            /* printf("Tempo de acesso atualizado para: %s\n", filesList[index].acessTime); */
+            else{
+                for(i = 0; i < dirTree[index]->total_files_this_row; i++){
+                    if(strcmp(dirTree[index][i].fileName, args[1]) == 0)
+                        get_current_date_time(dirTree[index][i].acessTime, sizeof(dirTree[index][i].acessTime));
+                }
+            }
         }
 
         /* criar um arquivo ou modificar seu acesso */
         else if(strcmp(args[0], "criadir") == 0){
-            if(create_file(args[1], 1))
-                printf("Diretório criado!\n");
-            
+            int index = fileExists(args[1], 1);
+            if(index == -1){
+                if(create_file(args[1], 1))
+                    printf("Diretório criado!\n");
+            }
         }
     }
     else
@@ -109,12 +125,16 @@ int process_command(char* args[], int total_parameters){
 /* inicializar a tabela FAT e o bitmap */
 void initializeFileSystem(){
     int i;
+    char* c = "/";
 
     for(i = 0; i < TOTAL_BLOCKS; i++)
         fat[i] = 0;
     
     for(i = 0; i < TOTAL_BLOCKS/8; i++)
         bitmap[i] = 0;
+
+    /* criar diretorio '/' */
+    create_file(c, 1);
 }
 
 /* retornar o horario no formato DD/MM/YY HH:MM:SS */
@@ -126,13 +146,74 @@ void get_current_date_time(char* buffer, size_t size){
                             tm.tm_hour, tm.tm_min, tm.tm_sec);
 }
 
-void realloc_files_list(){
-    FileInfo* v = malloc(sizeof(FileInfo) * 2*total_files);
+/* realocar a arvore de diretorios */
+void realloc_dir_tree(){
+    int i, j;
+    int totalFiles;
+    FileInfo** v;
 
-    memcpy(v, filesList, sizeof(FileInfo) * total_files);
-    free(filesList);
+    /* alocar o espaco anterior */
+    v = (FileInfo**)malloc(sizeof(FileInfo*) * 2*total_dirs);
+    for(i = 0; i < total_dirs; i++){
+        totalFiles = dirTree[i][0].total_files_this_row;
+        v[i] = (FileInfo*)malloc(sizeof(FileInfo) * totalFiles);
+    }
+    
+    /* copiar a estrutura antiga */
+    for(i = 0; i < total_dirs; i++){
+        totalFiles = dirTree[i][0].total_files_this_row;
+        for(j = 0; j < totalFiles; j++)
+            v[i][j] = dirTree[i][j];
+    }
+    
+    /* desalocar a estrutura antiga */
+    for(i = 0; i < total_dirs; i++)
+        free(dirTree[i]);
+    free(dirTree);
 
-    filesList = v;
+    dirTree = v;
+}
+
+void realloc_dir_list(int index){
+    int i, j;
+    int totalFiles;
+    FileInfo** v;
+
+    /* alocar o espaco anterior */
+    v = (FileInfo**)malloc(sizeof(FileInfo*) * 2*dir_tree_capacity);
+    for(i = 0; i < total_dirs; i++){
+        totalFiles = dirTree[i][0].total_files_this_row;
+        if(i == index)
+            v[i] = (FileInfo*)malloc(sizeof(FileInfo) * 2 * totalFiles);
+        else
+            v[i] = (FileInfo*)malloc(sizeof(FileInfo) * totalFiles);
+    }
+    
+    /* copiar a estrutura antiga */
+    for(i = 0; i < total_dirs; i++){
+        totalFiles = dirTree[i][0].total_files_this_row;
+        for(j = 0; j < totalFiles; j++)
+            v[i][j] = dirTree[i][j];
+    }
+    
+    /* desalocar a estrutura antiga */
+    for(i = 0; i < total_dirs; i++)
+        free(dirTree[i]);
+    free(dirTree);
+
+    dirTree = v;
+}
+
+/* slash no filename para obter um filepath */
+void getDirectoryPath(char* filepath, char* directory){
+    char* lastSlash = strrchr(filepath, '/');
+    if (lastSlash != NULL){
+        size_t dirLength = lastSlash - filepath + 1;
+        strncpy(directory, filepath, dirLength);
+        directory[dirLength] = '\0';
+    } 
+    else
+        strcpy(directory, "/");
 }
 
 /* procurar uma posição livre na tabela FAT para criar um arquivo vazio */
@@ -155,64 +236,101 @@ int find_free_bitmap_position(){
     return -1;
 }
 
-/* criar um novo arquivo */
-int create_file(char* filename, int isDir){
+/* inicializar os valores do arquivo criado */
+FileInfo set_file_config(char* filename, int isDir, int fi, int bi){
     FileInfo new_file;
-    int file_index = find_free_FAT_position();    /* procurar na tabela FAT um espaço livre */
-    int bitmap_index = find_free_bitmap_position();
-    /* é possível criar o arquivo? */
-    if(file_index == -1 || bitmap_index == -1){
-        printf("[ERRO]: espaço insuficiente.\n");
-        return 0;
-    }
-
-    bitmap[bitmap_index] = 1;
 
     /* preencher as informações do arquivo */
     get_current_date_time(new_file.creationTime, sizeof(new_file.creationTime));
     strcpy(new_file.fileName, filename);
     strcpy(new_file.acessTime, new_file.creationTime);
     strcpy(new_file.modificationTime, new_file.creationTime);
-
-    new_file.fat_block = file_index;
-    new_file.bitmap_block = bitmap_index;
+    new_file.fat_block = fi;
+    new_file.bitmap_block = bi;
     new_file.bytesSize = 0; 
     new_file.total_blocks = 1;
+    new_file.row_capacity = 1;
     new_file.is_directory = isDir;
 
-    fat[file_index] = -1;       // marcar que um arquivo ocupa essa posicao
-    bitmap[bitmap_index] = 1;   // marcar bitmap ocupado
+    return new_file;
+}
 
-    /* 
-     * bytesSize / 4096 retorna o numero de blocos desse arquivo 
-     * quando esse valor for maior que o total_blocks, criar um 
-     * novo bloco na FAT e armazenar o conteudo extra lá
-     * a cada 8 posições na FAT, alocar uma nova no bitmap
-    */
+/* criar um novo arquivo */
+int create_file(char* filename, int isDir){
+    FileInfo new_file;
+    int i, total_files;
+    int file_index = find_free_FAT_position();
+    int bitmap_index = find_free_bitmap_position();
+    char dir_path[256];
 
-    filesList[total_files] = new_file;
-    total_files += 1;
+    getDirectoryPath(filename, dir_path);
 
-    if(total_files == files_list_capacity){
-        realloc_files_list();
-        files_list_capacity *= 2;
+    /* é possível criar o arquivo? */
+    if(file_index == -1 || bitmap_index == -1){
+        printf("[ERRO]: espaço insuficiente.\n");
+        return 0;
     }
-    
-    /*printf("Nome do arquivo: %s\n", fat[file_index].fileName);
-    printf("Ultimo acesso: %s\n", fat[file_index].acessTime);
-    printf("Hora de criacao: %s\n", fat[file_index].creationTime);
-    printf("Tamanho do arquivo: %d\n", fat[file_index].bytesSize);
-    printf("Diretorio: %d\n", fat[file_index].isDirectory);
-    printf("Bloco de inicio: %d\n", fat[file_index].currentBlock);*/
+
+    new_file = set_file_config(filename, isDir, file_index, bitmap_index);
+
+    if(isDir){
+        new_file.total_files_this_row = 1;
+
+        /* adicionar o diretorio na arvore de diretorios */
+        dirTree[total_dirs] = (FileInfo*)malloc(sizeof(FileInfo) * 1);
+        dirTree[total_dirs][0] = new_file;
+        total_dirs += 1;
+
+        if(total_dirs == dir_tree_capacity){
+            realloc_dir_tree();
+            dir_tree_capacity *= 2;
+        }
+    }
+
+    /* adicionar o arquivo embaixo de um diretorio na arvore */
+    if(strcmp(filename, "/")){
+        for(i = 0; i < total_dirs; i++){
+            if(strcmp(dirTree[i][0].fileName, dir_path) == 0){  /* encontramos o diretorio, colocar o arquivo nele */
+                if(dirTree[i][0].total_files_this_row == dirTree[i][0].row_capacity){
+                    realloc_dir_list(i);
+                    dirTree[i][0].row_capacity *= 2;
+                }
+                total_files = dirTree[i][0].total_files_this_row;
+                dirTree[i][total_files] = new_file;
+                dirTree[i][0].total_files_this_row += 1;
+            }
+        }
+    }
+
+    /* preencher a tabela fat e o bitmap */
+    fat[file_index] = -1;
+    bitmap[bitmap_index] = 1;
 
     return 1;
 }
 
 /* verifica se um arquivo existe */
-int fileExists(char* filename){
-    int i;
-    for(i = 0; i < total_files; i++)
-        if(strcmp(filesList[i].fileName, filename) == 0)
-            return i;
+int fileExists(char* filename, int isDir){
+    int i, j;
+    int total_files;
+    char dir_path[256];
+
+    if(isDir){
+        for(i = 0; i < total_dirs; i++)
+            if(strcmp(dirTree[i][0].fileName, filename) == 0)
+                return i;
+        return -1;
+    }
+    /* se não é diretório, pegar o nome do arquivo e procurar dentro do diretorio dele */
+    getDirectoryPath(filename, dir_path);
+    for(i = 0; i < total_dirs; i++){
+        if(strcmp(dirTree[i][0].fileName, dir_path) == 0){ /* encontramos o diretorio, vemos se o arquivo existe */
+            total_files = dirTree[i][0].total_files_this_row;
+            for(j = 0; j < total_files; j++){
+                if(strcmp(dirTree[i][j].fileName, filename) == 0)
+                    return i;
+            }
+        }
+    }
     return -1;
 }
