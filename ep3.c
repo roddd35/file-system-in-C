@@ -361,15 +361,15 @@ int create_file(char* filename, int isDir){
     if(isDir){
         new_file.total_files_this_row = 1;
 
-        /* adicionar o diretorio na arvore de diretorios */
-        dirTree[total_dirs] = (FileInfo*)malloc(sizeof(FileInfo) * 2);
-        dirTree[total_dirs][0] = new_file;
-        total_dirs += 1;
-
         if(total_dirs == dir_tree_capacity){
             realloc_dir_tree();
             dir_tree_capacity *= 2;
         }
+
+        /* adicionar o diretorio na arvore de diretorios */
+        dirTree[total_dirs] = (FileInfo*)malloc(sizeof(FileInfo) * 1);
+        dirTree[total_dirs][0] = new_file;
+        total_dirs += 1;
     }
 
     /* adicionar o arquivo embaixo de um diretorio na arvore */
@@ -406,16 +406,21 @@ int fileExists(char* filename, int isDir){
                 return i;
         return -1;
     }
+
     /* se não é diretório, pegar o nome do arquivo e procurar dentro do diretorio dele */
     getDirectoryPath(filename, dir_path);
+    if(strcmp(dir_path, "") == 0)
+        strcpy(dir_path, "/");
     for(i = 0; i < total_dirs; i++){
         if(strcmp(dirTree[i][0].fileName, dir_path) == 0){ /* encontramos o diretorio, vemos se o arquivo existe */
             total_files = dirTree[i][0].total_files_this_row;
-            for(j = 0; j < total_files; j++){
-                if(strcmp(dirTree[i][j].fileName, filename) == 0)
-                    return i;
-            }
+            break;
         }
+    }
+
+    for(j = 0; j < total_files; j++){
+        if(strcmp(dirTree[i][j].fileName, filename) == 0)
+            return i;
     }
     return -1;
 }
