@@ -126,6 +126,16 @@ int process_command(char* args[], int total_parameters){
             list_directory(args[1]);
         }
 
+        else if(strcmp(args[0], "apaga") == 0){
+            int index = fileExists(args[1], 0);
+            if(index != -1){
+                if(erase_file(args[1], index))
+                    printf("Arquivo apagado!\n");
+                else
+                    printf("[ERRO]: Não foi possível apagar o arquivo!\n");
+            }
+        }
+
         else if(strcmp(args[0], "imprime") == 0)
             imprime_diretorios();
     }
@@ -299,6 +309,46 @@ void imprime_diretorios(){
     }
 }
 
+/* remover os blocos reservados a um arquivo na FAT */
+void free_fat_list(int i){
+    int aux;
+    while(fat[i] != -1){
+        aux = fat[i];
+        fat[i] = 0;
+        i = aux;
+    }
+    if(fat[i] == -1)
+        fat[i] = 0;
+}
+
+/* remover os blocos reservados a um arquivo no bitmap */
+void free_bitmap(int bitmapList[], int total_bits){
+    int i;
+    /* bytesUsed / sizeof(unsigned char)?? */
+    for(i = 0; i < total_bits; i++)
+        bitmap[bitmapList[i]] = 0;
+}
+
+/* inicializar os valores do arquivo criado */
+FileInfo set_file_config(char* filename, int isDir, int fi, int bi){
+    FileInfo new_file;
+
+    /* preencher as informações do arquivo */
+    get_current_date_time(new_file.creationTime, sizeof(new_file.creationTime));
+    strcpy(new_file.fileName, filename);
+    strcpy(new_file.acessTime, new_file.creationTime);
+    strcpy(new_file.modificationTime, new_file.creationTime);
+    new_file.fat_block = fi;
+    new_file.bitmap_block[0] = bi;
+    new_file.total_bits = 1;
+    new_file.total_blocks = 1;
+    new_file.row_capacity = 1;
+    new_file.bytesSize = 0; 
+    new_file.is_directory = isDir;
+
+    return new_file;
+}
+
 /* procurar uma posição livre na tabela FAT para criar um arquivo vazio */
 int find_free_FAT_position(){
     int i;
@@ -319,23 +369,33 @@ int find_free_bitmap_position(){
     return -1;
 }
 
-/* inicializar os valores do arquivo criado */
-FileInfo set_file_config(char* filename, int isDir, int fi, int bi){
-    FileInfo new_file;
+/* apagar um arquivo regular 
+ * se for implementar contador de posicao livre
+ * no bitmap e na FAT, diminuir aqui
+ */
+int erase_file(char* filename, int dirIndex){
+    int j, k;
+    for(j = 0; j < dirTree[dirIndex][0].total_files_this_row; j++){
+        if(strcmp(dirTree[dirIndex][j].fileName, filename) == 0)
+            break;  /* arquivo está na posicao [dirIndex][j] */
+    }
 
-    /* preencher as informações do arquivo */
-    get_current_date_time(new_file.creationTime, sizeof(new_file.creationTime));
-    strcpy(new_file.fileName, filename);
-    strcpy(new_file.acessTime, new_file.creationTime);
-    strcpy(new_file.modificationTime, new_file.creationTime);
-    new_file.fat_block = fi;
-    new_file.bitmap_block = bi;
-    new_file.bytesSize = 0; 
-    new_file.total_blocks = 1;
-    new_file.row_capacity = 1;
-    new_file.is_directory = isDir;
+    /* apagar as referencias do arquivo na FAT */
+    free_fat_list(dirTree[dirIndex][j].fat_block);
 
-    return new_file;
+    /* apagar as referencias do arquivo no bitmap */
+    free_bitmap(dirTree[dirIndex][j].bitmap_block, dirTree[dirIndex][j].total_bits);
+
+    if(j != dirTree[dirIndex][0].total_files_this_row - 1){
+        for(k = j; k < dirTree[dirIndex][0].total_files_this_row - 1; k++)
+            dirTree[dirIndex][k] = dirTree[dirIndex][k+1];
+    }
+
+    dirTree[dirIndex][0].total_files_this_row -= 1;
+    /*for(j = 0; j < dirTree[dirIndex][0].total_files_this_row; j++){
+        printf("arquivo: %s\n", dirTree[dirIndex][j].fileName);
+    }*/
+    return 1;
 }
 
 /* criar um novo arquivo */
