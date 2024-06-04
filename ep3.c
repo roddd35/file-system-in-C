@@ -100,7 +100,7 @@ int process_command(char* args[], int total_parameters){
             }
             /* arquivo existe, modificar seu ultimo acesso */
             else{
-                for(i = 0; i < dirTree[index]->total_files_this_row; i++){
+                for(i = 0; i < dirTree[index][0].total_files_this_row; i++){
                     if(strcmp(dirTree[index][i].fileName, args[1]) == 0)
                         get_current_date_time(dirTree[index][i].acessTime, sizeof(dirTree[index][i].acessTime));
                 }
@@ -115,6 +115,14 @@ int process_command(char* args[], int total_parameters){
                     printf("Diretório criado!\n");
             }
         }
+
+        /* mostrar informações de um arquivo */
+        else if(strcmp(args[0], "mostra") == 0){
+            show_file(args[1]);
+        }
+
+        else if(strcmp(args[0], "imprime") == 0)
+            imprime_diretorios();
     }
     else
         printf("Por favor, monte um sistema de arquivos antes!\n");
@@ -154,14 +162,15 @@ void realloc_dir_tree(){
 
     /* alocar o espaco anterior */
     v = (FileInfo**)malloc(sizeof(FileInfo*) * 2*total_dirs);
+    if (v == NULL) {
+        perror("[ERRO]: malloc");
+        exit(EXIT_FAILURE);
+    }
+
     for(i = 0; i < total_dirs; i++){
         totalFiles = dirTree[i][0].total_files_this_row;
         v[i] = (FileInfo*)malloc(sizeof(FileInfo) * totalFiles);
-    }
-    
-    /* copiar a estrutura antiga */
-    for(i = 0; i < total_dirs; i++){
-        totalFiles = dirTree[i][0].total_files_this_row;
+        /* copiar a estrutura antiga */
         for(j = 0; j < totalFiles; j++)
             v[i][j] = dirTree[i][j];
     }
@@ -174,6 +183,7 @@ void realloc_dir_tree(){
     dirTree = v;
 }
 
+/* realocar a lista de arquivos embaixo de um diretorio */
 void realloc_dir_list(int index){
     int i, j;
     int totalFiles;
@@ -181,18 +191,23 @@ void realloc_dir_list(int index){
 
     /* alocar o espaco anterior */
     v = (FileInfo**)malloc(sizeof(FileInfo*) * 2*dir_tree_capacity);
+    if (v == NULL) {
+        perror("[ERRO]: malloc");
+        exit(EXIT_FAILURE);
+    }
+
     for(i = 0; i < total_dirs; i++){
         totalFiles = dirTree[i][0].total_files_this_row;
         if(i == index)
             v[i] = (FileInfo*)malloc(sizeof(FileInfo) * 2 * totalFiles);
         else
             v[i] = (FileInfo*)malloc(sizeof(FileInfo) * totalFiles);
-    }
-    
-    /* copiar a estrutura antiga */
-    for(i = 0; i < total_dirs; i++){
-        totalFiles = dirTree[i][0].total_files_this_row;
-        for(j = 0; j < totalFiles; j++)
+        if (v[i] == NULL) {
+            perror("[ERRO]: malloc");
+            exit(EXIT_FAILURE);
+        }
+        /* copiar a estrutura antiga */
+        for (j = 0; j < totalFiles; j++)
             v[i][j] = dirTree[i][j];
     }
     
@@ -205,15 +220,54 @@ void realloc_dir_list(int index){
 }
 
 /* slash no filename para obter um filepath */
-void getDirectoryPath(char* filepath, char* directory){
+void getDirectoryPath(char* filepath, char* directory) {
     char* lastSlash = strrchr(filepath, '/');
-    if (lastSlash != NULL){
-        size_t dirLength = lastSlash - filepath + 1;
+    if (lastSlash != NULL) {
+        size_t dirLength = lastSlash - filepath;
         strncpy(directory, filepath, dirLength);
         directory[dirLength] = '\0';
-    } 
-    else
+    } else {
         strcpy(directory, "/");
+    }
+}
+
+/* imprimir os dados de um arquivo */
+void show_file(char* filename){
+    int i, j;
+    FileInfo aux;
+    char dir_path[256];
+
+    getDirectoryPath(filename, dir_path);
+    for(i = 0; i < total_dirs; i++){
+        if(strcmp(dir_path, dirTree[i][0].fileName) == 0)
+            break;
+    }
+
+    for(j = 0; j < dirTree[i][0].total_files_this_row; j++){
+        if(strcmp(filename, dirTree[i][j].fileName) == 0){
+            aux = dirTree[i][j];
+            printf("%s\n", dirTree[i][j].fileName);
+            if(!aux.is_directory)
+                printf("\tTamanho em bytes: %d\n", aux.bytesSize);
+            printf("\tÚltimo acesso: %s\n", aux.acessTime);
+            printf("\tData de criação: %s\n", aux.creationTime);
+            printf("\tData de modificação: %s\n", aux.modificationTime);
+        }
+    }
+}
+
+/* imprimir diretorios e o que esta dentro deles */
+void imprime_diretorios(){
+    int i, j;
+    for(i = 0; i < total_dirs; i++){
+        printf("Diretorio %s: ", dirTree[i][0].fileName);
+        printf("%d ", dirTree[i][0].total_files_this_row);
+        printf("%d ", dirTree[i][0].row_capacity);
+        for(j = 0; j < dirTree[i][0].total_files_this_row; j++){
+            printf("%s ", dirTree[i][j].fileName);
+        }
+        printf("\n");
+    }
 }
 
 /* procurar uma posição livre na tabela FAT para criar um arquivo vazio */
@@ -277,7 +331,7 @@ int create_file(char* filename, int isDir){
         new_file.total_files_this_row = 1;
 
         /* adicionar o diretorio na arvore de diretorios */
-        dirTree[total_dirs] = (FileInfo*)malloc(sizeof(FileInfo) * 1);
+        dirTree[total_dirs] = (FileInfo*)malloc(sizeof(FileInfo) * 2);
         dirTree[total_dirs][0] = new_file;
         total_dirs += 1;
 
@@ -291,7 +345,7 @@ int create_file(char* filename, int isDir){
     if(strcmp(filename, "/")){
         for(i = 0; i < total_dirs; i++){
             if(strcmp(dirTree[i][0].fileName, dir_path) == 0){  /* encontramos o diretorio, colocar o arquivo nele */
-                if(dirTree[i][0].total_files_this_row == dirTree[i][0].row_capacity){
+                if(dirTree[i][0].total_files_this_row >= dirTree[i][0].row_capacity){
                     realloc_dir_list(i);
                     dirTree[i][0].row_capacity *= 2;
                 }
