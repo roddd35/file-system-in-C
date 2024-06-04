@@ -41,5 +41,6 @@ void show_file(char* filename);
 void list_directory(char* dirname);
 void free_fat_list(int firstPos);
 void free_bitmap(int bitmapList[], int total_bits);
+void unmount_file_system();
 void imprime_diretorios();
 FileInfo set_file_config(char* filename, int isDir, int fi, int bi);

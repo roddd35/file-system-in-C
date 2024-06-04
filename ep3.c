@@ -31,9 +31,6 @@ int main(){
     char* command;
     char* args[10];
 
-    dirTree = (FileInfo**)malloc(sizeof(FileInfo*) * 1);
-    dir_tree_capacity = 1;
-
     while(1){
         /* ler comando */
         command = readline(displayPrompt());
@@ -123,9 +120,12 @@ int process_command(char* args[], int total_parameters){
 
         /* listar arquivos abaixo de um diretorio */
         else if(strcmp(args[0], "lista") == 0){
+            if(args[1] == NULL)
+                return 0;
             list_directory(args[1]);
         }
 
+        /* apagar um arquivo regular */
         else if(strcmp(args[0], "apaga") == 0){
             int index = fileExists(args[1], 0);
             if(index != -1){
@@ -135,6 +135,10 @@ int process_command(char* args[], int total_parameters){
                     printf("[ERRO]: Não foi possível apagar o arquivo!\n");
             }
         }
+
+        /* desmontar o sistema de arquivos */
+        else if(strcmp(args[0], "desmonta") == 0)
+            unmount_file_system();
 
         else if(strcmp(args[0], "imprime") == 0)
             imprime_diretorios();
@@ -149,6 +153,9 @@ int process_command(char* args[], int total_parameters){
 void initializeFileSystem(){
     int i;
     char* c = "/";
+
+    dirTree = (FileInfo**)malloc(sizeof(FileInfo*) * 1);
+    dir_tree_capacity = 1;
 
     for(i = 0; i < TOTAL_BLOCKS; i++)
         fat[i] = 0;
@@ -281,7 +288,7 @@ void list_directory(char* dirname){
             break;
     }
 
-    for(j = 0; j < dirTree[i][0].total_files_this_row; j++){
+    for(j = 1; j < dirTree[i][0].total_files_this_row; j++){
         aux = dirTree[i][j];
         if(aux.is_directory && strcmp(aux.fileName, "/"))
             printf("%s/\n", dirTree[i][j].fileName);
@@ -327,6 +334,24 @@ void free_bitmap(int bitmapList[], int total_bits){
     /* bytesUsed / sizeof(unsigned char)?? */
     for(i = 0; i < total_bits; i++)
         bitmap[bitmapList[i]] = 0;
+}
+
+/* desmontar o sistema de arquivos */
+void unmount_file_system(){
+    int i;
+    total_dirs = 0;
+    isSystemMounted = 0;
+    dir_tree_capacity = 0;
+
+    for(i = 0; i < total_dirs; i++)
+        free(dirTree[i]);
+    free(dirTree);
+
+    for(i = 0; i < TOTAL_BLOCKS; i++)
+        fat[i] = 0;
+    
+    for(i = 0; i < TOTAL_BLOCKS/8; i++)
+        bitmap[i] = 0;
 }
 
 /* inicializar os valores do arquivo criado */
