@@ -36,5 +36,6 @@ void realloc_dir_list(int index);
 void get_current_date_time(char* buffer, size_t size);
 void getDirectoryPath(char* filepath, char* directory);
 void show_file(char* filename);
+void list_directory(char* dirname);
 void imprime_diretorios();
 FileInfo set_file_config(char* filename, int isDir, int fi, int bi);

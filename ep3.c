@@ -121,6 +121,11 @@ int process_command(char* args[], int total_parameters){
             show_file(args[1]);
         }
 
+        /* listar arquivos abaixo de um diretorio */
+        else if(strcmp(args[0], "lista") == 0){
+            list_directory(args[1]);
+        }
+
         else if(strcmp(args[0], "imprime") == 0)
             imprime_diretorios();
     }
@@ -256,6 +261,30 @@ void show_file(char* filename){
     }
 }
 
+/* imprimir os dados de um arquivo */
+void list_directory(char* dirname){
+    int i, j;
+    FileInfo aux;
+
+    for(i = 0; i < total_dirs; i++){
+        if(strcmp(dirname, dirTree[i][0].fileName) == 0)
+            break;
+    }
+
+    for(j = 0; j < dirTree[i][0].total_files_this_row; j++){
+        aux = dirTree[i][j];
+        if(aux.is_directory && strcmp(aux.fileName, "/"))
+            printf("%s/\n", dirTree[i][j].fileName);
+        else{
+            printf("%s\n", dirTree[i][j].fileName);
+            printf("\tTamanho em bytes: %d\n", aux.bytesSize);
+        }
+        printf("\tÚltimo acesso: %s\n", aux.acessTime);
+        printf("\tData de criação: %s\n", aux.creationTime);
+        printf("\tData de modificação: %s\n", aux.modificationTime);
+    }
+}
+
 /* imprimir diretorios e o que esta dentro deles */
 void imprime_diretorios(){
     int i, j;
@@ -318,6 +347,8 @@ int create_file(char* filename, int isDir){
     char dir_path[256];
 
     getDirectoryPath(filename, dir_path);
+    if(strcmp(dir_path, "") == 0)
+        strcpy(dir_path, "/");
 
     /* é possível criar o arquivo? */
     if(file_index == -1 || bitmap_index == -1){
