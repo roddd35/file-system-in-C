@@ -51,7 +51,7 @@ int main(){
         command = NULL;
     }
 
-    free(args);
+    // free(args);
     free(command);
     for(i = 0; i < total_dirs; i++)
         free(dirTree[i]);
@@ -183,16 +183,16 @@ void realloc_dir_tree(){
     FileInfo** v;
 
     /* alocar o espaco anterior */
-    v = (FileInfo**)malloc(sizeof(FileInfo*) * 2*total_dirs);
+    v = (FileInfo**)malloc(sizeof(FileInfo*) *2*dir_tree_capacity);
     if (v == NULL) {
         perror("[ERRO]: malloc");
         exit(EXIT_FAILURE);
     }
 
+    /* copiar a estrutura antiga */
     for(i = 0; i < total_dirs; i++){
         totalFiles = dirTree[i][0].total_files_this_row;
-        v[i] = (FileInfo*)malloc(sizeof(FileInfo) * totalFiles);
-        /* copiar a estrutura antiga */
+        v[i] = (FileInfo*)malloc(sizeof(FileInfo) * totalFiles);    
         for(j = 0; j < totalFiles; j++)
             v[i][j] = dirTree[i][j];
     }
@@ -442,35 +442,41 @@ int create_file(char* filename, int isDir){
     }
 
     new_file = set_file_config(filename, isDir, file_index, bitmap_index);
+    printf("Nome do arquivo: %s\n", new_file.fileName);
 
     if(isDir){
         new_file.total_files_this_row = 1;
-
-        if(total_dirs == dir_tree_capacity){
+        if(total_dirs >= dir_tree_capacity){
             realloc_dir_tree();
             dir_tree_capacity *= 2;
-        }
+        }        
 
         /* adicionar o diretorio na arvore de diretorios */
-        dirTree[total_dirs] = (FileInfo*)malloc(sizeof(FileInfo) * 1);
+        dirTree[total_dirs] = (FileInfo*)malloc(sizeof(FileInfo) * 2);
         dirTree[total_dirs][0] = new_file;
         total_dirs += 1;
     }
+    imprime_diretorios();
 
     /* adicionar o arquivo embaixo de um diretorio na arvore */
     if(strcmp(filename, "/")){
         for(i = 0; i < total_dirs; i++){
             if(strcmp(dirTree[i][0].fileName, dir_path) == 0){  /* encontramos o diretorio, colocar o arquivo nele */
-                if(dirTree[i][0].total_files_this_row >= dirTree[i][0].row_capacity){
+                total_files = dirTree[i][0].total_files_this_row;
+
+                if(total_files >= dirTree[i][0].row_capacity){
                     realloc_dir_list(i);
                     dirTree[i][0].row_capacity *= 2;
                 }
-                total_files = dirTree[i][0].total_files_this_row;
+
                 dirTree[i][total_files] = new_file;
                 dirTree[i][0].total_files_this_row += 1;
+                
+                break;
             }
         }
     }
+    imprime_diretorios();
 
     /* preencher a tabela fat e o bitmap */
     fat[file_index] = -1;
@@ -483,6 +489,7 @@ int create_file(char* filename, int isDir){
 int fileExists(char* filename, int isDir){
     int i, j;
     int total_files;
+    int flag = 0;
     char dir_path[256];
 
     if(isDir){
@@ -499,13 +506,16 @@ int fileExists(char* filename, int isDir){
     for(i = 0; i < total_dirs; i++){
         if(strcmp(dirTree[i][0].fileName, dir_path) == 0){ /* encontramos o diretorio, vemos se o arquivo existe */
             total_files = dirTree[i][0].total_files_this_row;
+            flag = 1;
             break;
         }
     }
 
-    for(j = 0; j < total_files; j++){
-        if(strcmp(dirTree[i][j].fileName, filename) == 0)
-            return i;
+    if(flag){
+        for(j = 0; j < total_files; j++){
+            if(strcmp(dirTree[i][j].fileName, filename) == 0)
+                return i;
+        }
     }
     return -1;
 }
