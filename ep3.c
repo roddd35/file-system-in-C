@@ -16,12 +16,10 @@
  * a cada 8 posições na FAT, alocar uma nova no bitmap
  */
 
-
 int isSystemMounted = 0;
 int total_dirs = 0;
-int dir_tree_capacity;
 
-FileInfo** dirTree;
+FileInfo dirTree[1000][256];
 unsigned char bitmap[TOTAL_BLOCKS / 8];
 int fat[TOTAL_BLOCKS];
 
@@ -53,9 +51,6 @@ int main(){
 
     // free(args);
     free(command);
-    for(i = 0; i < total_dirs; i++)
-        free(dirTree[i]);
-    free(dirTree);
 
     return 0;
 }
@@ -73,8 +68,6 @@ int process_command(char* args[], int total_parameters){
         /* criar um sistema de arquivos */
         initializeFileSystem();
         isSystemMounted = 1;
-
-        /* criar o sistema de arquivos */
 
         /* carregar o sistema de arquivos */
         return 0;
@@ -154,8 +147,6 @@ void initializeFileSystem(){
     int i;
     char* c = "/";
 
-    dirTree = (FileInfo**)malloc(sizeof(FileInfo*) * 1);
-    dir_tree_capacity = 1;
 
     for(i = 0; i < TOTAL_BLOCKS; i++)
         fat[i] = 0;
@@ -174,71 +165,6 @@ void get_current_date_time(char* buffer, size_t size){
     snprintf(buffer, size, "%02d/%02d/%02d %02d:%02d:%02d", 
                             tm.tm_mday, tm.tm_mon + 1, tm.tm_year + 1900, 
                             tm.tm_hour, tm.tm_min, tm.tm_sec);
-}
-
-/* realocar a arvore de diretorios */
-void realloc_dir_tree(){
-    int i, j;
-    int totalFiles;
-    FileInfo** v;
-
-    /* alocar o espaco anterior */
-    v = (FileInfo**)malloc(sizeof(FileInfo*) *2*dir_tree_capacity);
-    if (v == NULL) {
-        perror("[ERRO]: malloc");
-        exit(EXIT_FAILURE);
-    }
-
-    /* copiar a estrutura antiga */
-    for(i = 0; i < total_dirs; i++){
-        totalFiles = dirTree[i][0].total_files_this_row;
-        v[i] = (FileInfo*)malloc(sizeof(FileInfo) * totalFiles);    
-        for(j = 0; j < totalFiles; j++)
-            v[i][j] = dirTree[i][j];
-    }
-    
-    /* desalocar a estrutura antiga */
-    for(i = 0; i < total_dirs; i++)
-        free(dirTree[i]);
-    free(dirTree);
-
-    dirTree = v;
-}
-
-/* realocar a lista de arquivos embaixo de um diretorio */
-void realloc_dir_list(int index){
-    int i, j;
-    int totalFiles;
-    FileInfo** v;
-
-    /* alocar o espaco anterior */
-    v = (FileInfo**)malloc(sizeof(FileInfo*) * 2*dir_tree_capacity);
-    if (v == NULL) {
-        perror("[ERRO]: malloc");
-        exit(EXIT_FAILURE);
-    }
-
-    for(i = 0; i < total_dirs; i++){
-        totalFiles = dirTree[i][0].total_files_this_row;
-        if(i == index)
-            v[i] = (FileInfo*)malloc(sizeof(FileInfo) * 2 * totalFiles);
-        else
-            v[i] = (FileInfo*)malloc(sizeof(FileInfo) * totalFiles);
-        if (v[i] == NULL) {
-            perror("[ERRO]: malloc");
-            exit(EXIT_FAILURE);
-        }
-        /* copiar a estrutura antiga */
-        for (j = 0; j < totalFiles; j++)
-            v[i][j] = dirTree[i][j];
-    }
-    
-    /* desalocar a estrutura antiga */
-    for(i = 0; i < total_dirs; i++)
-        free(dirTree[i]);
-    free(dirTree);
-
-    dirTree = v;
 }
 
 /* slash no filename para obter um filepath */
@@ -341,11 +267,7 @@ void unmount_file_system(){
     int i;
     total_dirs = 0;
     isSystemMounted = 0;
-    dir_tree_capacity = 0;
 
-    for(i = 0; i < total_dirs; i++)
-        free(dirTree[i]);
-    free(dirTree);
 
     for(i = 0; i < TOTAL_BLOCKS; i++)
         fat[i] = 0;
@@ -442,21 +364,14 @@ int create_file(char* filename, int isDir){
     }
 
     new_file = set_file_config(filename, isDir, file_index, bitmap_index);
-    printf("Nome do arquivo: %s\n", new_file.fileName);
 
     if(isDir){
-        new_file.total_files_this_row = 1;
-        if(total_dirs >= dir_tree_capacity){
-            realloc_dir_tree();
-            dir_tree_capacity *= 2;
-        }        
+        new_file.total_files_this_row = 1;  
 
         /* adicionar o diretorio na arvore de diretorios */
-        dirTree[total_dirs] = (FileInfo*)malloc(sizeof(FileInfo) * 2);
         dirTree[total_dirs][0] = new_file;
         total_dirs += 1;
     }
-    imprime_diretorios();
 
     /* adicionar o arquivo embaixo de um diretorio na arvore */
     if(strcmp(filename, "/")){
@@ -465,7 +380,6 @@ int create_file(char* filename, int isDir){
                 total_files = dirTree[i][0].total_files_this_row;
 
                 if(total_files >= dirTree[i][0].row_capacity){
-                    realloc_dir_list(i);
                     dirTree[i][0].row_capacity *= 2;
                 }
 
@@ -476,7 +390,6 @@ int create_file(char* filename, int isDir){
             }
         }
     }
-    imprime_diretorios();
 
     /* preencher a tabela fat e o bitmap */
     fat[file_index] = -1;
