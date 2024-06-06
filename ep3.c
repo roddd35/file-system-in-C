@@ -254,11 +254,15 @@ void free_fat_list(int i){
 }
 
 /* remover os blocos reservados a um arquivo no bitmap */
-void free_bitmap(int bitmapList[], int total_bits){
-    int i;
-    /* bytesUsed / sizeof(unsigned char)?? */
-    for(i = 0; i < total_bits; i++)
-        bitmap[bitmapList[i]] = 0;
+void free_bitmap(int i){
+    int aux;
+    while(bitmap[i] != -1){
+        aux = bitmap[i];
+        bitmap[i] = 0;
+        i = aux;
+    }
+    if(bitmap[i] == -1)
+        bitmap[i] = 0;
 }
 
 /* desmontar o sistema de arquivos */
@@ -285,6 +289,7 @@ void save_file_info(FileInfo* fileInfo){
 
     write(file, fileInfo->fileName, FILENAME_LENGTH);
     write(file, &fileInfo->fat_block, sizeof(int));
+    write(file, &fileInfo->bitmap_block[0], sizeof(int));
     write(file, &fileInfo->bytesSize, sizeof(int));
     write(file, &fileInfo->is_directory, sizeof(int));
     write(file, fileInfo->creationTime, 20);
@@ -365,38 +370,35 @@ int find_free_bitmap_position(){
  * no bitmap e na FAT, diminuir aqui
  */
 int erase_file(char* filename, int dirIndex){
-    // int j, k;
-    // for(j = 0; j < dirTree[dirIndex][0].total_files_this_row; j++){
-    //     if(strcmp(dirTree[dirIndex][j].fileName, filename) == 0)
-    //         break;  /* arquivo está na posicao [dirIndex][j] */
-    // }
-
-    // /* apagar as referencias do arquivo na FAT */
-    // free_fat_list(dirTree[dirIndex][j].fat_block);
-
-    // /* apagar as referencias do arquivo no bitmap */
-    // free_bitmap(dirTree[dirIndex][j].bitmap_block, dirTree[dirIndex][j].total_bits);
-
-    // if(j != dirTree[dirIndex][0].total_files_this_row - 1){
-    //     for(k = j; k < dirTree[dirIndex][0].total_files_this_row - 1; k++)
-    //         dirTree[dirIndex][k] = dirTree[dirIndex][k+1];
-    // }
-
-    // dirTree[dirIndex][0].total_files_this_row -= 1;
-    // return 1;
-    int file = open(mount_file, O_RDWR);
-    if(file == -1){
+    int readFile = open(mount_file, O_RDWR);
+    int auxFile = open("aux", O_RDWR | O_CREAT | O_TRUNC, 0644);
+    if(auxFile == -1 || readFile == -1){
         perror("Failed to open file");
         return 0;
     }
-    
+
     fileAux fInfo;
     
-    while(read(file, &fInfo, sizeof(fileAux)) > 0){
-        if(strcmp(fInfo.fileName, filename) == 0){
-            
-        }
+    // copiar todos os tudo para o arquivo auxiliar
+    while(read(readFile, &fInfo, sizeof(fileAux)) > 0){
+        if(strcmp(fInfo.fileName, filename) != 0)
+            write(auxFile, &fInfo, sizeof(fileAux)); 
+        else{
+            // liberar o bitmap e FAT aqui, mudar essa funcao no main amanha
+            free_fat_list(fInfo.fat_block);
+            free_bitmap(fInfo.bitmap_block);
+        }  
     }
+
+    if (rename("aux", mount_file) == -1) {
+        perror("Failed to rename file");
+        return 0; 
+    }
+
+    close(readFile);
+    close(auxFile);
+
+    return 1;
 }
 
 /* criar um novo arquivo */

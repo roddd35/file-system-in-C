@@ -17,6 +17,7 @@
 typedef struct{
     char fileName[FILENAME_LENGTH];
     int fat_block;
+    int bitmap_block;
     int bytesSize;
     int is_directory;
     char creationTime[20];
@@ -48,6 +49,7 @@ int create_file(char* filename, int isDir);
 int erase_file(char* filename, int dirIndex);
 int process_command(char* args[], int total_parameters);
 
+void free_bitmap(int i);
 void imprime_diretorios();
 void unmount_file_system();
 void show_file(char* filename);
@@ -55,9 +57,8 @@ void free_fat_list(int firstPos);
 void list_directory(char* dirname);
 void initializeFileSystem(char* args[]);
 void update_access_time(char *filename);
-void free_bitmap(int bitmapList[], int total_bits);
+void save_file_info(FileInfo* fileInfo);
 void get_current_date_time(char* buffer, size_t size);
 void getDirectoryPath(char* filepath, char* directory);
-void save_file_info(FileInfo* fileInfo);
 
 FileInfo set_file_config(char* filename, int isDir, int fi, int bi);
