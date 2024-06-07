@@ -118,9 +118,8 @@ int process_command(char* args[], int total_parameters){
 
         /* apagar um arquivo regular */
         else if(strcmp(args[0], "apaga") == 0){
-            int index = fileExists(args[1]);
-            if(index != -1){
-                if(erase_file(args[1], index))
+            if(fileExists(args[1])){
+                if(erase_file(args[1]))
                     printf("Arquivo apagado!\n");
                 else
                     printf("[ERRO]: Não foi possível apagar o arquivo!\n");
@@ -134,6 +133,20 @@ int process_command(char* args[], int total_parameters){
         /* criar um db na memoria */
         else if(strcmp(args[0], "atualizadb") == 0)
             update_db();
+
+        /* procura uma substring no bd */
+        else if(strcmp(args[0], "busca") == 0)
+            search_string(args[1]);
+
+        /* apagar um diretorio e todos arquivos abaixo */
+        else if(strcmp(args[0], "apagadir") == 0){
+            if(fileExists(args[1])){
+                if(erase_dir(args[1]))
+                    printf("Diretório apagado!\n");
+                else
+                    printf("[ERRO]: Não foi possível apagar o diretório!\n");
+            }
+        }
 
         else if(strcmp(args[0], "imprime") == 0)
             imprime_diretorios();
@@ -260,9 +273,9 @@ void imprime_diretorios(){
         if(strcmp(dirTree[i][0], "") == 0)
             break;
         if(strcmp(dirTree[i][0], "/"))
-            printf("Diretorio: %s/\n", dirTree[i][0]);
+            printf("%s/:\n", dirTree[i][0]);
         else
-            printf("Diretorio: %s\n", dirTree[i][0]);
+            printf("%s:\n", dirTree[i][0]);
         for(j = 1; j < maxFiles; j++){
             if(strcmp(dirTree[i][j], "") == 0)
                 break;
@@ -284,7 +297,8 @@ void set_bitmap(int block, int value){
 /* remover os blocos reservados a um arquivo na FAT */
 void free_fat_list(int i){
     int current_block = i;
-    while (current_block != -1) {
+
+    while (fat[current_block] != -1){
         int next_block = fat[current_block];
 
         set_bitmap(current_block, 0);
@@ -292,6 +306,9 @@ void free_fat_list(int i){
 
         current_block = next_block;
     }
+
+    if(fat[current_block] == -1)
+        fat[current_block] = 0;
 }
 
 /* remover os blocos reservados a um arquivo no bitmap */
@@ -408,6 +425,25 @@ void update_db(){
     printf("Banco de Dados atualizado!\n");
 }
 
+/* buscar uma string s no bd */
+void search_string(char* s){
+    int i, j;
+    char* substring;
+
+    for(i = 0; i < maxDir; i++){
+        if(strcmp(dirTree[i][0], "") == 0)
+            break;
+        for(j = 0; j < maxFiles; j++){
+            if(strcmp(dirTree[i][j], "") == 0)
+                break;
+            substring = strstr(dirTree[i][j], s);
+            if (substring != NULL) {
+                printf("\t-> %s\n", dirTree[i][j]);
+            }
+        }
+    }
+}
+
 /* inicializar os valores do arquivo criado */
 FileInfo set_file_config(char* filename, int isDir, int fi){
     FileInfo new_file;
@@ -448,11 +484,8 @@ int find_free_bitmap_position(){
     return -1;
 }
 
-/* apagar um arquivo regular 
- * se for implementar contador de posicao livre
- * no bitmap e na FAT, diminuir aqui
- */
-int erase_file(char* filename, int dirIndex){
+/* apagar um arquivo regular */
+int erase_file(char* filename){
     int readFile = open(mount_file, O_RDWR);
     int auxFile = open("aux", O_RDWR | O_CREAT | O_TRUNC, 0644);
     if(auxFile == -1 || readFile == -1){
@@ -473,13 +506,48 @@ int erase_file(char* filename, int dirIndex){
     }
 
     if (rename("aux", mount_file) == -1) {
-        perror("Failed to rename file");
+        perror("[ERRO]: salvar arquivo novo!");
         return 0; 
     }
 
     close(readFile);
     close(auxFile);
 
+    return 1;
+}
+
+/* apagar um diretório e todos arquivos embaixo */
+int erase_dir(char* dirname){
+    int dirname_len = strlen(dirname);
+    int file = open(mount_file, O_RDWR);
+    int auxFile = open("aux", O_RDWR | O_CREAT | O_TRUNC, 0644);
+    if(file == -1 || auxFile == -1){
+        perror("[ERRO]: abrir arquivo");
+        return 0;
+    }
+
+    FileInfo fInfo;
+
+    while(read(file, &fInfo, sizeof(FileInfo)) > 0){
+        if(strncmp(dirname, fInfo.fileName, dirname_len) != 0)
+            write(auxFile, &fInfo, sizeof(FileInfo));
+        else{
+            // free_fat_list(fInfo.fat_block);
+            if(fInfo.is_directory)
+                total_dirs -= 1;
+            else
+                total_files -= 1;
+            printf("[-] %s\n", fInfo.fileName);
+        }
+    }
+
+    if(rename("aux", mount_file) == -1){
+        perror("[ERRO]: salvar arquivo novo!");
+        return 0;
+    }
+    close(file);
+    close(auxFile);
+    
     return 1;
 }
 

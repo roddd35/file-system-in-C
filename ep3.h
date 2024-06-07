@@ -32,9 +32,10 @@ char* displayPrompt();
 
 int find_free_FAT_position();
 int find_free_bitmap_position();
+int erase_dir(char* dirname);
+int erase_file(char* filename);
 int fileExists(char* filename);
 int create_file(char* filename, int isDir);
-int erase_file(char* filename, int dirIndex);
 int process_command(char* args[], int total_parameters);
 
 void update_db();
@@ -44,6 +45,7 @@ void unmount_file_system();
 void show_file(char* filename);
 void print_data(FileInfo fInfo);
 void free_fat_list(int firstPos);
+void search_string(char* string);
 void list_directory(char* dirname);
 void set_bitmap(int block, int value);
 void initializeFileSystem(char* args[]);
@@ -57,6 +59,6 @@ FileInfo set_file_config(char* filename, int isDir, int fi);
 // desmonta -> salvar a FAT e bitmap no arquivo binario
 // monta -> imprimir a arvore e carregar o bitmap e FAT
 // status
-// atualizaDB e busca string
-// apagadir
+// apagadir -> so apagar tudo com a substring do diretorio desejado
 // copia origem destino (verificar o espaco livre antes de salvar o arquivo externo)
+// mostra arquivo
