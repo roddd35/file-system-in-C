@@ -243,7 +243,7 @@ void list_directory(char* dirname) {
         } 
         else{
             if (strcmp(dirpath, dirname) == 0)
-                print_data(fInfo);
+        print_data(fInfo);
         }
     }
     close(file);
@@ -262,16 +262,27 @@ void list_directory(char* dirname) {
 //     }
 // }
 
+/* define 0 ou 1 em uma posicao do bitmap */
+void set_bitmap(int block, int value){
+    int byteIndex = block / 8;
+    int bitIndex = block % 8;
+    if(value)
+        bitmap[byteIndex] |= (1 << bitIndex); // marca como ocupado
+    else
+        bitmap[byteIndex] &= ~(1 << bitIndex); // marca como livre
+}
+
 /* remover os blocos reservados a um arquivo na FAT */
 void free_fat_list(int i){
-    int aux;
-    while(fat[i] != -1){
-        aux = fat[i];
-        fat[i] = 0;
-        i = aux;
+    int current_block = i;
+    while (current_block != -1) {
+        int next_block = fat[current_block];
+
+        set_bitmap(current_block, 0);
+        fat[current_block] = 0;
+
+        current_block = next_block;
     }
-    if(fat[i] == -1)
-        fat[i] = 0;
 }
 
 /* remover os blocos reservados a um arquivo no bitmap */
@@ -405,11 +416,8 @@ int erase_file(char* filename, int dirIndex){
     while(read(readFile, &fInfo, sizeof(FileInfo)) > 0){
         if(strcmp(fInfo.fileName, filename) != 0)
             write(auxFile, &fInfo, sizeof(FileInfo)); 
-        else{
-            // liberar o bitmap e FAT aqui, mudar essa funcao no main amanha
-            free_fat_list(fInfo.fat_block);
-            // free_bitmap(fInfo.bitmap_block);
-        }  
+        else
+            free_fat_list(fInfo.fat_block); // liberar tanto FAT como bitmap
     }
 
     if (rename("aux", mount_file) == -1) {

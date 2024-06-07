@@ -42,6 +42,7 @@ void show_file(char* filename);
 void print_data(FileInfo fInfo);
 void free_fat_list(int firstPos);
 void list_directory(char* dirname);
+void set_bitmap(int block, int value);
 void initializeFileSystem(char* args[]);
 void update_access_time(char *filename);
 void save_file_info(FileInfo* fileInfo);
