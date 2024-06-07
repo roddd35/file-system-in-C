@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <readline/history.h>
 #include <readline/readline.h>
@@ -17,23 +18,8 @@
 typedef struct{
     char fileName[FILENAME_LENGTH];
     int fat_block;
-    int bitmap_block;
     int bytesSize;
     int is_directory;
-    char creationTime[20];
-    char modificationTime[20];
-    char accessTime[20];
-}fileAux;
-
-typedef struct{
-    int fat_block;
-    int bitmap_block[3200];
-    int total_bits;
-    int bytesSize;  /* diretorios nao tem esse atributo */
-    int total_blocks;
-    int total_files_this_row;
-    int is_directory;
-    char fileName[FILENAME_LENGTH];
     char creationTime[20];
     char modificationTime[20];
     char accessTime[20];
@@ -53,6 +39,7 @@ void free_bitmap(int i);
 void imprime_diretorios();
 void unmount_file_system();
 void show_file(char* filename);
+void print_data(FileInfo fInfo);
 void free_fat_list(int firstPos);
 void list_directory(char* dirname);
 void initializeFileSystem(char* args[]);
@@ -61,4 +48,4 @@ void save_file_info(FileInfo* fileInfo);
 void get_current_date_time(char* buffer, size_t size);
 void getDirectoryPath(char* filepath, char* directory);
 
-FileInfo set_file_config(char* filename, int isDir, int fi, int bi);
+FileInfo set_file_config(char* filename, int isDir, int fi);

@@ -18,6 +18,7 @@
 
 int isSystemMounted = 0;
 int total_dirs = 0;
+int total_files = 0;
 char* mount_file;
 
 FileInfo dirTree[1000][255];
@@ -83,8 +84,10 @@ int process_command(char* args[], int total_parameters){
         if(strcmp(args[0], "toca") == 0){ 
             /* arquivo nao existe, criar um novo */ 
             if(!fileExists(args[1])){
-                if(create_file(args[1], 0))
+                if(create_file(args[1], 0)){
                     printf("Arquivo criado!\n");
+                    total_files += 1;
+                }
             }
             /* arquivo existe, modificar seu ultimo acesso */
             else
@@ -94,15 +97,17 @@ int process_command(char* args[], int total_parameters){
         /* criar um arquivo ou modificar seu acesso */
         else if(strcmp(args[0], "criadir") == 0){ 
             if(!fileExists(args[1])){
-                if(create_file(args[1], 1))
+                if(create_file(args[1], 1)){
                     printf("Diretório criado!\n");
+                    total_dirs += 1;
+                }
             }
         }
 
         /* mostrar informações de um arquivo */
-        else if(strcmp(args[0], "mostra") == 0){
-            show_file(args[1]);
-        }
+        // else if(strcmp(args[0], "mostra") == 0){
+        //     show_file(args[1]);
+        // }
 
         /* listar arquivos abaixo de um diretorio */
         else if(strcmp(args[0], "lista") == 0){
@@ -126,8 +131,8 @@ int process_command(char* args[], int total_parameters){
         else if(strcmp(args[0], "desmonta") == 0)
             unmount_file_system();
 
-        else if(strcmp(args[0], "imprime") == 0)
-            imprime_diretorios();
+        // else if(strcmp(args[0], "imprime") == 0)
+        //     imprime_diretorios();
     }
     else
         printf("Por favor, monte um sistema de arquivos antes!\n");
@@ -138,7 +143,9 @@ int process_command(char* args[], int total_parameters){
 /* inicializar a tabela FAT e o bitmap */
 void initializeFileSystem(char* args[]){
     int i;
-    char* c = "/";
+    char c[FILENAME_LENGTH];
+
+    strcpy(c, "/");
 
     FILE* file = fopen(args[1], "rb");
     if(!file){
@@ -155,7 +162,6 @@ void initializeFileSystem(char* args[]){
     else{
 
     }*/
-    
 }
 
 /* retornar o horario no formato DD/MM/YY HH:MM:SS */
@@ -170,76 +176,91 @@ void get_current_date_time(char* buffer, size_t size){
 /* slash no filename para obter um filepath */
 void getDirectoryPath(char* filepath, char* directory) {
     char* lastSlash = strrchr(filepath, '/');
-    if (lastSlash != NULL) {
+    if (lastSlash != NULL && lastSlash != filepath) {
         size_t dirLength = lastSlash - filepath;
         strncpy(directory, filepath, dirLength);
         directory[dirLength] = '\0';
-    } else {
-        strcpy(directory, "/");
+        return;
     }
+    strcpy(directory, "/");
 }
 
 /* imprimir os dados de um arquivo */
-void show_file(char* filename){
-    int i, j;
-    FileInfo aux;
-    char dir_path[256];
+// void show_file(char* filename){
+//     int i, j;
+//     FileInfo aux;
+//     char dir_path[256];
 
-    getDirectoryPath(filename, dir_path);
-    for(i = 0; i < total_dirs; i++){
-        if(strcmp(dir_path, dirTree[i][0].fileName) == 0)
-            break;
-    }
+//     getDirectoryPath(filename, dir_path);
+//     for(i = 0; i < total_dirs; i++){
+//         if(strcmp(dir_path, dirTree[i][0].fileName) == 0)
+//             break;
+//     }
 
-    for(j = 0; j < dirTree[i][0].total_files_this_row; j++){
-        if(strcmp(filename, dirTree[i][j].fileName) == 0){
-            aux = dirTree[i][j];
-            printf("%s\n", dirTree[i][j].fileName);
-            if(!aux.is_directory)
-                printf("\tTamanho em bytes: %d\n", aux.bytesSize);
-            printf("\tÚltimo acesso: %s\n", aux.accessTime);
-            printf("\tData de criação: %s\n", aux.creationTime);
-            printf("\tData de modificação: %s\n", aux.modificationTime);
-        }
-    }
+//     for(j = 0; j < dirTree[i][0].total_files_this_row; j++){
+//         if(strcmp(filename, dirTree[i][j].fileName) == 0){
+//             aux = dirTree[i][j];
+//             printf("%s\n", dirTree[i][j].fileName);
+//             if(!aux.is_directory)
+//                 printf("\tTamanho em bytes: %d\n", aux.bytesSize);
+//             printf("\tÚltimo acesso: %s\n", aux.accessTime);
+//             printf("\tData de criação: %s\n", aux.creationTime);
+//             printf("\tData de modificação: %s\n", aux.modificationTime);
+//         }
+//     }
+// }
+
+/* imprimir de fato os dados da funcao abaixo */
+void print_data(FileInfo fInfo){
+    if (!fInfo.is_directory) {
+        printf("%s\n", fInfo.fileName);
+        printf("\tTamanho em bytes: %d\n", fInfo.bytesSize);
+    } 
+    else
+        printf("%s/\n", fInfo.fileName);
+    printf("\tÚltimo acesso: %s\n", fInfo.accessTime);
+    printf("\tHora de criação: %s\n", fInfo.creationTime);
+    printf("\tHora de modificação: %s\n", fInfo.modificationTime);
 }
 
 /* imprimir os dados de um arquivo */
-void list_directory(char* dirname){
-    int i, j;
-    FileInfo aux;
-
-    for(i = 0; i < total_dirs; i++){
-        if(strcmp(dirname, dirTree[i][0].fileName) == 0)
-            break;
+void list_directory(char* dirname) {
+    int file = open(mount_file, O_RDWR);
+    if (file == -1) {
+        perror("[ERRO]: abrir arquivo");
+        return;
     }
 
-    for(j = 1; j < dirTree[i][0].total_files_this_row; j++){
-        aux = dirTree[i][j];
-        if(aux.is_directory && strcmp(aux.fileName, "/"))
-            printf("%s/\n", dirTree[i][j].fileName);
+    FileInfo fInfo;
+    while (read(file, &fInfo, sizeof(FileInfo)) > 0) {
+        char dirpath[FILENAME_LENGTH];
+        getDirectoryPath(fInfo.fileName, dirpath);
+
+        if (strcmp(dirname, "/") == 0) {
+            char* remainingPath = fInfo.fileName + 1;
+            if (strchr(remainingPath, '/') == NULL)
+                print_data(fInfo);
+        } 
         else{
-            printf("%s\n", dirTree[i][j].fileName);
-            printf("\tTamanho em bytes: %d\n", aux.bytesSize);
+            if (strcmp(dirpath, dirname) == 0)
+                print_data(fInfo);
         }
-        printf("\tÚltimo acesso: %s\n", aux.accessTime);
-        printf("\tData de criação: %s\n", aux.creationTime);
-        printf("\tData de modificação: %s\n", aux.modificationTime);
     }
+    close(file);
 }
 
 /* imprimir diretorios e o que esta dentro deles */
-void imprime_diretorios(){
-    int i, j;
-    for(i = 0; i < total_dirs; i++){
-        printf("Diretorio %s: ", dirTree[i][0].fileName);
-        printf("%d ", dirTree[i][0].total_files_this_row);
-        for(j = 0; j < dirTree[i][0].total_files_this_row; j++){
-            printf("%s ", dirTree[i][j].fileName);
-        }
-        printf("\n");
-    }
-}
+// void imprime_diretorios(){
+//     int i, j;
+//     for(i = 0; i < total_dirs; i++){
+//         printf("Diretorio %s: ", dirTree[i][0].fileName);
+//         printf("%d ", dirTree[i][0].total_files_this_row);
+//         for(j = 0; j < dirTree[i][0].total_files_this_row; j++){
+//             printf("%s ", dirTree[i][j].fileName);
+//         }
+//         printf("\n");
+//     }
+// }
 
 /* remover os blocos reservados a um arquivo na FAT */
 void free_fat_list(int i){
@@ -269,8 +290,11 @@ void free_bitmap(int i){
 void unmount_file_system(){
     int i;
     total_dirs = 0;
+    total_files = 0;
     isSystemMounted = 0;
+    mount_file = NULL;
 
+    // copiar FAT e bitmap para o mount_file
 
     for(i = 0; i < TOTAL_BLOCKS; i++)
         fat[i] = 0;
@@ -283,19 +307,19 @@ void unmount_file_system(){
 void save_file_info(FileInfo* fileInfo){
     int file = open(mount_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (file == -1) {
-        perror("Failed to open file");
+        perror("[ERRO]: abrir arquivo");
         return;
     }
+    FileInfo f;
+    strcpy(f.fileName, fileInfo->fileName);
+    strcpy(f.accessTime, fileInfo->accessTime);
+    strcpy(f.creationTime, fileInfo->creationTime);
+    strcpy(f.modificationTime, fileInfo->modificationTime);
+    f.fat_block = fileInfo->fat_block;
+    f.bytesSize = fileInfo->bytesSize;
+    f.is_directory = fileInfo->is_directory;
 
-    write(file, fileInfo->fileName, FILENAME_LENGTH);
-    write(file, &fileInfo->fat_block, sizeof(int));
-    write(file, &fileInfo->bitmap_block[0], sizeof(int));
-    write(file, &fileInfo->bytesSize, sizeof(int));
-    write(file, &fileInfo->is_directory, sizeof(int));
-    write(file, fileInfo->creationTime, 20);
-    write(file, fileInfo->modificationTime, 20);
-    write(file, fileInfo->accessTime, 20);
-    write(file, "\n", 1);
+    write(file, &f, sizeof(FileInfo));
 
     close(file);
 }
@@ -304,17 +328,17 @@ void save_file_info(FileInfo* fileInfo){
 void update_access_time(char *filename){
     int file = open(mount_file, O_RDWR);
     if (file == -1) 
-        perror("Failed to open file");
+        perror("[ERRO]: abrir arquivo");
 
-    fileAux fInfo;
+    FileInfo fInfo;
 
-    while (read(file, &fInfo, sizeof(fileAux)) > 0) {
+    while (read(file, &fInfo, sizeof(FileInfo)) > 0) {
         if (strcmp(fInfo.fileName, filename) == 0) {
             char acTime[20];
             get_current_date_time(acTime, sizeof(acTime));
             strncpy(fInfo.accessTime, acTime, sizeof(acTime));
-            lseek(file, -sizeof(fileAux), SEEK_CUR);
-            write(file, &fInfo, sizeof(fileAux));
+            lseek(file, -sizeof(FileInfo), SEEK_CUR);
+            write(file, &fInfo, sizeof(FileInfo));
             close(file);
             return;
         }
@@ -324,7 +348,7 @@ void update_access_time(char *filename){
 }
 
 /* inicializar os valores do arquivo criado */
-FileInfo set_file_config(char* filename, int isDir, int fi, int bi){
+FileInfo set_file_config(char* filename, int isDir, int fi){
     FileInfo new_file;
 
     /* preencher as informações do arquivo */
@@ -333,11 +357,9 @@ FileInfo set_file_config(char* filename, int isDir, int fi, int bi){
     strcpy(new_file.accessTime, new_file.creationTime);
     strcpy(new_file.modificationTime, new_file.creationTime);
     new_file.fat_block = fi;
-    new_file.bitmap_block[0] = bi;
-    new_file.total_bits = 1;
-    new_file.total_blocks = 1;
+
     if(!isDir)
-        new_file.bytesSize = 327; // ocupa 1 na FAT, 1 no bitmap, eh o total dos dados salvos
+        new_file.bytesSize = 327;
     else
         new_file.bytesSize = 0;
     new_file.is_directory = isDir;
@@ -373,20 +395,20 @@ int erase_file(char* filename, int dirIndex){
     int readFile = open(mount_file, O_RDWR);
     int auxFile = open("aux", O_RDWR | O_CREAT | O_TRUNC, 0644);
     if(auxFile == -1 || readFile == -1){
-        perror("Failed to open file");
+        perror("[ERRO]: abrir arquivo");
         return 0;
     }
 
-    fileAux fInfo;
+    FileInfo fInfo;
     
-    // copiar todos os tudo para o arquivo auxiliar
-    while(read(readFile, &fInfo, sizeof(fileAux)) > 0){
+    // copiar todos arquivos desejados para o arquivo auxiliar
+    while(read(readFile, &fInfo, sizeof(FileInfo)) > 0){
         if(strcmp(fInfo.fileName, filename) != 0)
-            write(auxFile, &fInfo, sizeof(fileAux)); 
+            write(auxFile, &fInfo, sizeof(FileInfo)); 
         else{
             // liberar o bitmap e FAT aqui, mudar essa funcao no main amanha
             free_fat_list(fInfo.fat_block);
-            free_bitmap(fInfo.bitmap_block);
+            // free_bitmap(fInfo.bitmap_block);
         }  
     }
 
@@ -404,10 +426,9 @@ int erase_file(char* filename, int dirIndex){
 /* criar um novo arquivo */
 int create_file(char* filename, int isDir){
     FileInfo new_file;
-    int i, total_files;
     int file_index = find_free_FAT_position();
     int bitmap_index = find_free_bitmap_position();
-    char dir_path[256];
+    char dir_path[FILENAME_LENGTH];
 
     getDirectoryPath(filename, dir_path);
     if(strcmp(dir_path, "") == 0)
@@ -419,29 +440,7 @@ int create_file(char* filename, int isDir){
         return 0;
     }
 
-    new_file = set_file_config(filename, isDir, file_index, bitmap_index);
-
-    if(isDir){
-        new_file.total_files_this_row = 1;  
-
-        /* adicionar o diretorio na arvore de diretorios */
-        dirTree[total_dirs][0] = new_file;
-        total_dirs += 1;
-    }
-
-    /* adicionar o arquivo embaixo de um diretorio na arvore */
-    if(strcmp(filename, "/")){
-        for(i = 0; i < total_dirs; i++){
-            if(strcmp(dirTree[i][0].fileName, dir_path) == 0){  /* encontramos o diretorio, colocar o arquivo nele */
-                total_files = dirTree[i][0].total_files_this_row;
-
-                dirTree[i][total_files] = new_file;
-                dirTree[i][0].total_files_this_row += 1;
-                
-                break;
-            }
-        }
-    }
+    new_file = set_file_config(filename, isDir, file_index);
 
     save_file_info(&new_file);
 
@@ -455,24 +454,19 @@ int create_file(char* filename, int isDir){
 /* verifica se um arquivo existe */
 int fileExists(char *filename){
     int file = open(mount_file, O_RDONLY);
+    FileInfo fInfo;
+
     if (file == -1) {
-        perror("Failed to open file");
+        perror("[ERRO]: abrir arquivo");
         return -1;
     }
 
-    fileAux fInfo;
-    int found = 0;
-
-    while (read(file, &fInfo, sizeof(fileAux)) > 0) {
+    while (read(file, &fInfo, sizeof(FileInfo)) > 0) {
         if (strcmp(fInfo.fileName, filename) == 0) {
-            found = 1;
-            break;
+            close(file);
+            return 1;
         }
     }
-
     close(file);
-
-    if(found)
-        return 1;
     return 0;
 }
