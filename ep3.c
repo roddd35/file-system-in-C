@@ -21,7 +21,7 @@ int total_dirs = 0;
 int total_files = 0;
 char* mount_file;
 
-FileInfo dirTree[1000][255];
+char dirTree[maxDir][maxFiles][FILENAME_LENGTH];
 int fat[TOTAL_BLOCKS];
 uint8_t bitmap[TOTAL_BLOCKS / 8];
 
@@ -131,8 +131,12 @@ int process_command(char* args[], int total_parameters){
         else if(strcmp(args[0], "desmonta") == 0)
             unmount_file_system();
 
-        // else if(strcmp(args[0], "imprime") == 0)
-        //     imprime_diretorios();
+        /* criar um db na memoria */
+        else if(strcmp(args[0], "atualizadb") == 0)
+            update_db();
+
+        else if(strcmp(args[0], "imprime") == 0)
+            imprime_diretorios();
     }
     else
         printf("Por favor, monte um sistema de arquivos antes!\n");
@@ -250,17 +254,22 @@ void list_directory(char* dirname) {
 }
 
 /* imprimir diretorios e o que esta dentro deles */
-// void imprime_diretorios(){
-//     int i, j;
-//     for(i = 0; i < total_dirs; i++){
-//         printf("Diretorio %s: ", dirTree[i][0].fileName);
-//         printf("%d ", dirTree[i][0].total_files_this_row);
-//         for(j = 0; j < dirTree[i][0].total_files_this_row; j++){
-//             printf("%s ", dirTree[i][j].fileName);
-//         }
-//         printf("\n");
-//     }
-// }
+void imprime_diretorios(){
+    int i, j;
+    for(i = 0; i < maxDir; i++){
+        if(strcmp(dirTree[i][0], "") == 0)
+            break;
+        if(strcmp(dirTree[i][0], "/"))
+            printf("Diretorio: %s/\n", dirTree[i][0]);
+        else
+            printf("Diretorio: %s\n", dirTree[i][0]);
+        for(j = 1; j < maxFiles; j++){
+            if(strcmp(dirTree[i][j], "") == 0)
+                break;
+            printf("\t%s\n", dirTree[i][j]);
+        }
+    }
+}
 
 /* define 0 ou 1 em uma posicao do bitmap */
 void set_bitmap(int block, int value){
@@ -338,13 +347,15 @@ void save_file_info(FileInfo* fileInfo){
 /* modificar no arquivo binário o access time */
 void update_access_time(char *filename){
     int file = open(mount_file, O_RDWR);
-    if (file == -1) 
+    if (file == -1){
         perror("[ERRO]: abrir arquivo");
+        return;
+    }
 
     FileInfo fInfo;
 
-    while (read(file, &fInfo, sizeof(FileInfo)) > 0) {
-        if (strcmp(fInfo.fileName, filename) == 0) {
+    while (read(file, &fInfo, sizeof(FileInfo)) > 0){
+        if (strcmp(fInfo.fileName, filename) == 0){
             char acTime[20];
             get_current_date_time(acTime, sizeof(acTime));
             strncpy(fInfo.accessTime, acTime, sizeof(acTime));
@@ -356,6 +367,45 @@ void update_access_time(char *filename){
     }
 
     close(file);
+}
+
+/* criar arvore de diretorios/arquivos */
+void update_db(){
+    int i, j;
+    int line = 0;
+    int file = open(mount_file, O_RDONLY);
+    char path[255];
+
+    if(file == -1){
+        perror("[ERRO]: abrir arquivo");
+        return;
+    }
+
+    for(i = 0; i < maxDir; i++)
+        for(j = 0; j < maxFiles; j++)
+            strcpy(dirTree[i][j], "");
+
+    FileInfo fInfo;
+    while(read(file, &fInfo, sizeof(FileInfo)) > 0){
+        if(fInfo.is_directory){
+            strcpy(dirTree[line][0], fInfo.fileName);   /* filename ja tem o diretorio junto */
+            line++;
+        }
+        else{
+            getDirectoryPath(fInfo.fileName, path);
+            j = 0;
+            for(i = 0; i < line; i++){
+                if(strcmp(dirTree[i][0], path) == 0){
+                    while(strcmp(dirTree[i][j], ""))
+                        j++;
+                    strcpy(dirTree[i][j], fInfo.fileName);
+                    break;
+                }
+            }
+        }
+    }
+
+    printf("Banco de Dados atualizado!\n");
 }
 
 /* inicializar os valores do arquivo criado */
@@ -416,8 +466,10 @@ int erase_file(char* filename, int dirIndex){
     while(read(readFile, &fInfo, sizeof(FileInfo)) > 0){
         if(strcmp(fInfo.fileName, filename) != 0)
             write(auxFile, &fInfo, sizeof(FileInfo)); 
-        else
+        else{
             free_fat_list(fInfo.fat_block); // liberar tanto FAT como bitmap
+            total_files -= 1;
+        }
     }
 
     if (rename("aux", mount_file) == -1) {

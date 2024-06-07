@@ -13,6 +13,8 @@
 #define FAT_EOF -1
 #define FILENAME_LENGTH 255
 #define TOTAL_BLOCKS 25600
+#define maxDir 1000 /* maximo de diretorios na arvore (db) */
+#define maxFiles 255 /* maximo de arquivos em cada diretorio na arvore (db) */
 
 // estruturas de dados
 typedef struct{
@@ -35,6 +37,7 @@ int create_file(char* filename, int isDir);
 int erase_file(char* filename, int dirIndex);
 int process_command(char* args[], int total_parameters);
 
+void update_db();
 void free_bitmap(int i);
 void imprime_diretorios();
 void unmount_file_system();
@@ -50,3 +53,10 @@ void get_current_date_time(char* buffer, size_t size);
 void getDirectoryPath(char* filepath, char* directory);
 
 FileInfo set_file_config(char* filename, int isDir, int fi);
+
+// desmonta -> salvar a FAT e bitmap no arquivo binario
+// monta -> imprimir a arvore e carregar o bitmap e FAT
+// status
+// atualizaDB e busca string
+// apagadir
+// copia origem destino (verificar o espaco livre antes de salvar o arquivo externo)
