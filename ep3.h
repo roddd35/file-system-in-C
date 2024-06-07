@@ -15,6 +15,9 @@
 #define TOTAL_BLOCKS 25600
 #define maxDir 1000 /* maximo de diretorios na arvore (db) */
 #define maxFiles 255 /* maximo de arquivos em cada diretorio na arvore (db) */
+#define KB 1024
+#define maxBytesSize 4096
+#define totalAvailableKB 102400
 
 // estruturas de dados
 typedef struct{
@@ -39,6 +42,7 @@ int create_file(char* filename, int isDir);
 int process_command(char* args[], int total_parameters);
 
 void update_db();
+void print_status();
 void free_bitmap(int i);
 void imprime_diretorios();
 void unmount_file_system();
@@ -58,7 +62,5 @@ FileInfo set_file_config(char* filename, int isDir, int fi);
 
 // desmonta -> salvar a FAT e bitmap no arquivo binario
 // monta -> imprimir a arvore e carregar o bitmap e FAT
-// status
-// apagadir -> so apagar tudo com a substring do diretorio desejado
 // copia origem destino (verificar o espaco livre antes de salvar o arquivo externo)
 // mostra arquivo

@@ -131,8 +131,10 @@ int process_command(char* args[], int total_parameters){
             unmount_file_system();
 
         /* criar um db na memoria */
-        else if(strcmp(args[0], "atualizadb") == 0)
+        else if(strcmp(args[0], "atualizadb") == 0){
             update_db();
+            printf("Banco de Dados atualizado!\n");
+        }
 
         /* procura uma substring no bd */
         else if(strcmp(args[0], "busca") == 0)
@@ -147,6 +149,10 @@ int process_command(char* args[], int total_parameters){
                     printf("[ERRO]: Não foi possível apagar o diretório!\n");
             }
         }
+
+        /* imprimir os status do sistema de arquivos */
+        else if(strcmp(args[0], "status") == 0)
+            print_status();
 
         else if(strcmp(args[0], "imprime") == 0)
             imprime_diretorios();
@@ -421,8 +427,6 @@ void update_db(){
             }
         }
     }
-
-    printf("Banco de Dados atualizado!\n");
 }
 
 /* buscar uma string s no bd */
@@ -442,6 +446,38 @@ void search_string(char* s){
             }
         }
     }
+}
+
+/* imprimir status do sistema de arquivos */
+void print_status(){
+    int bsize;
+    int total_dirs = 0;
+    int total_files = 0;
+    double free_space = 0;
+    double unused_space = 0;
+    int file = open(mount_file, O_RDONLY);
+    if(file == -1){
+        perror("[ERRO]: abrir arquivo");
+        return;
+    }
+
+    FileInfo fInfo;
+
+    while(read(file, &fInfo, sizeof(FileInfo)) > 0){
+        if(fInfo.is_directory) total_dirs += 1;
+        else total_files += 1;
+        bsize = fInfo.bytesSize;
+        free_space += bsize;
+        unused_space += (maxBytesSize - bsize); 
+    }
+
+    free_space = totalAvailableKB - (free_space/KB);
+    unused_space /= KB;
+
+    printf("\t[x] Arquivos: %d\n", total_files);
+    printf("\t[x] Diretórios: %d\n", total_dirs);
+    printf("\t[x] Espaço livre(KB): %.2f\n", free_space);
+    printf("\t[x] Espaço desperdiçado(KB): %.2f\n", unused_space);
 }
 
 /* inicializar os valores do arquivo criado */
@@ -532,7 +568,7 @@ int erase_dir(char* dirname){
         if(strncmp(dirname, fInfo.fileName, dirname_len) != 0)
             write(auxFile, &fInfo, sizeof(FileInfo));
         else{
-            // free_fat_list(fInfo.fat_block);
+            free_fat_list(fInfo.fat_block);
             if(fInfo.is_directory)
                 total_dirs -= 1;
             else
