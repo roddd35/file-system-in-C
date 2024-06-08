@@ -60,7 +60,6 @@ void getDirectoryPath(char* filepath, char* directory);
 
 FileInfo set_file_config(char* filename, int isDir, int fi);
 
-// desmonta -> salvar a FAT e bitmap no arquivo binario
-// monta -> imprimir a arvore e carregar o bitmap e FAT
+// monta -> imprimir a arvore
 // copia origem destino (verificar o espaco livre antes de salvar o arquivo externo)
 // mostra arquivo

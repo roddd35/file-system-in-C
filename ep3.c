@@ -17,8 +17,6 @@
  */
 
 int isSystemMounted = 0;
-int total_dirs = 0;
-int total_files = 0;
 char* mount_file;
 
 char dirTree[maxDir][maxFiles][FILENAME_LENGTH];
@@ -84,10 +82,8 @@ int process_command(char* args[], int total_parameters){
         if(strcmp(args[0], "toca") == 0){ 
             /* arquivo nao existe, criar um novo */ 
             if(!fileExists(args[1])){
-                if(create_file(args[1], 0)){
+                if(create_file(args[1], 0))
                     printf("Arquivo criado!\n");
-                    total_files += 1;
-                }
             }
             /* arquivo existe, modificar seu ultimo acesso */
             else
@@ -97,10 +93,8 @@ int process_command(char* args[], int total_parameters){
         /* criar um arquivo ou modificar seu acesso */
         else if(strcmp(args[0], "criadir") == 0){ 
             if(!fileExists(args[1])){
-                if(create_file(args[1], 1)){
+                if(create_file(args[1], 1))
                     printf("Diretório criado!\n");
-                    total_dirs += 1;
-                }
             }
         }
 
@@ -181,10 +175,45 @@ void initializeFileSystem(char* args[]){
         /* criar diretorio '/' */
         create_file(c, 1);
     }
-    /* montar o sistema de arquivos com base no binario
-    else{
+    /* montar o sistema de arquivos com base no binario */
+    else {
+        /* mover o ponteiro para o inicio da FAT */
+        if(fseek(file, -(TOTAL_BLOCKS*sizeof(int) + (TOTAL_BLOCKS/8)*sizeof(uint8_t)), SEEK_END) != 0){
+            perror("[ERRO]: fseek para FAT");
+            fclose(file);
+            return;
+        }
 
-    }*/
+        /* ler a FAT */
+        if (fread(fat, sizeof(int), TOTAL_BLOCKS, file) != TOTAL_BLOCKS){
+            perror("[ERRO]: ler tabela FAT");
+            fclose(file);
+            return;
+        }
+
+        /* ler o bitmap */
+        if (fread(bitmap, sizeof(uint8_t), TOTAL_BLOCKS / 8, file) != TOTAL_BLOCKS / 8){
+            perror("[ERRO]: ler bitmap");
+            fclose(file);
+            return;
+        }
+
+        /* truncar o arquivo, tirando o bitmap e a fat */
+        fseek(file, -(TOTAL_BLOCKS*sizeof(int) + (TOTAL_BLOCKS/8)*sizeof(uint8_t)), SEEK_END);
+        long new_file_size = ftell(file);
+        printf("NEWFILE SIZE %ld\n", new_file_size);
+
+        fseek(file, 0, SEEK_END);
+        int len = ftell(file);
+        printf("Tamanho do arquivo total: %d\n", len);
+
+        fclose(file);
+
+        if (truncate(args[1], new_file_size) == -1){
+            perror("[ERRO]: truncar arquivo");
+            return;
+        }
+    }
 }
 
 /* retornar o horario no formato DD/MM/YY HH:MM:SS */
@@ -235,12 +264,16 @@ void getDirectoryPath(char* filepath, char* directory) {
 
 /* imprimir de fato os dados da funcao abaixo */
 void print_data(FileInfo fInfo){
-    if (!fInfo.is_directory) {
+    if(!fInfo.is_directory) {
         printf("%s\n", fInfo.fileName);
         printf("\tTamanho em bytes: %d\n", fInfo.bytesSize);
     } 
-    else
-        printf("%s/\n", fInfo.fileName);
+    else{
+        if(strcmp(fInfo.fileName, "/") == 0)
+            printf("%s\n", fInfo.fileName);
+        else
+            printf("%s/\n", fInfo.fileName);
+    }
     printf("\tÚltimo acesso: %s\n", fInfo.accessTime);
     printf("\tHora de criação: %s\n", fInfo.creationTime);
     printf("\tHora de modificação: %s\n", fInfo.modificationTime);
@@ -266,7 +299,7 @@ void list_directory(char* dirname) {
         } 
         else{
             if (strcmp(dirpath, dirname) == 0)
-        print_data(fInfo);
+                print_data(fInfo);
         }
     }
     close(file);
@@ -332,18 +365,39 @@ void free_bitmap(int i){
 /* desmontar o sistema de arquivos */
 void unmount_file_system(){
     int i;
-    total_dirs = 0;
-    total_files = 0;
+    int file = open(mount_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    ssize_t bytes_written;
+    if(file == -1){
+        perror("[ERRO]: abrir arquivo");
+        return;
+    }
+
     isSystemMounted = 0;
     mount_file = NULL;
 
-    // copiar FAT e bitmap para o mount_file
+    /* copiar FAT e bitmap para o mount_file */
+    bytes_written = write(file, fat, TOTAL_BLOCKS*sizeof(int));
+    if (bytes_written != TOTAL_BLOCKS*sizeof(int)){
+        perror("[ERRO]: escrever tabela FAT");
+        close(file);
+        return;
+    }
 
+    bytes_written = write(file, bitmap, (TOTAL_BLOCKS/8)*sizeof(uint8_t));
+    if (bytes_written != (TOTAL_BLOCKS/8)*sizeof(uint8_t)){
+        perror("[ERRO]: escrever bitmap");
+        close(file);
+        return;
+    }
+
+    /* zerar FAT e bitmap */
     for(i = 0; i < TOTAL_BLOCKS; i++)
         fat[i] = 0;
     
     for(i = 0; i < TOTAL_BLOCKS/8; i++)
         bitmap[i] = 0;
+
+    close(file);
 }
 
 /* salvar informacoes do arquivo lido */
@@ -535,10 +589,8 @@ int erase_file(char* filename){
     while(read(readFile, &fInfo, sizeof(FileInfo)) > 0){
         if(strcmp(fInfo.fileName, filename) != 0)
             write(auxFile, &fInfo, sizeof(FileInfo)); 
-        else{
+        else
             free_fat_list(fInfo.fat_block); // liberar tanto FAT como bitmap
-            total_files -= 1;
-        }
     }
 
     if (rename("aux", mount_file) == -1) {
@@ -569,10 +621,6 @@ int erase_dir(char* dirname){
             write(auxFile, &fInfo, sizeof(FileInfo));
         else{
             free_fat_list(fInfo.fat_block);
-            if(fInfo.is_directory)
-                total_dirs -= 1;
-            else
-                total_files -= 1;
             printf("[-] %s\n", fInfo.fileName);
         }
     }
