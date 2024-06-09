@@ -21,6 +21,7 @@ char* mount_file;
 
 char dirTree[maxDir][maxFiles][FILENAME_LENGTH];
 int fat[TOTAL_BLOCKS];
+int visited[9999];
 uint8_t bitmap[TOTAL_BLOCKS / 8];
 
 int main(){
@@ -201,19 +202,88 @@ void initializeFileSystem(char* args[]){
         /* truncar o arquivo, tirando o bitmap e a fat */
         fseek(file, -(TOTAL_BLOCKS*sizeof(int) + (TOTAL_BLOCKS/8)*sizeof(uint8_t)), SEEK_END);
         long new_file_size = ftell(file);
-        printf("NEWFILE SIZE %ld\n", new_file_size);
 
-        fseek(file, 0, SEEK_END);
-        int len = ftell(file);
-        printf("Tamanho do arquivo total: %d\n", len);
+        // fseek(file, 0, SEEK_END);
 
         fclose(file);
 
         if (truncate(args[1], new_file_size) == -1){
             perror("[ERRO]: truncar arquivo");
-            return;
+            exit(1);
+        }
+
+        print_dir_tree();
+    }
+}
+
+/* imprimir a arvore de diretorios do sistema montado */
+void print_dir_tree(){
+    int file_count = 0, i;
+    int file = open(mount_file, O_RDONLY);
+    char filename[FILENAME_LENGTH];
+    FileInfo files[9999];
+    if (file == -1) {
+        perror("[ERRO]: abrir arquivo");
+        return;
+    }
+
+    for(i = 0; i < file_count; i++)
+        visited[i] = 0;
+
+    while(read(file, &files[file_count], sizeof(FileInfo)) > 0)
+        file_count++;
+
+    close(file);
+
+    for(i = 0; i < file_count; i++){
+        /* procurar todos os arquivos embaixo desse diretorio */
+        if(files[i].is_directory && !visited[i]){
+            visited[i] = 1;
+            if(strcmp(files[i].fileName, "/")){
+                get_filename(files[i].fileName, filename);
+                printf("%s\n", filename);
+            }
+            else
+                printf("%s\n", files[i].fileName);
+            print_directory(files, files[i].fileName, file_count, 1, i);
         }
     }
+}
+
+void print_directory(FileInfo f[], char dirName[], int file_count, int level, int currentIndex){
+    int i;
+    int j;
+    char path[FILENAME_LENGTH];
+    char filename[FILENAME_LENGTH];
+
+    for(j = 0; j < file_count; j++){
+        getDirectoryPath(f[j].fileName, path);
+        // printf("Comparando %s e %s\n", path, dirName);
+        if(strcmp(path, dirName) == 0){
+            for(i = 0; i < level && level > 1; i++)
+                printf("  ");
+            get_filename(f[j].fileName, filename);
+            if(f[j].is_directory && strcmp(f[j].fileName, dirName) && strcmp(f[j].fileName, "") && !visited[j]){
+                printf("L %s\n", filename);
+                visited[j] = 1;
+                print_directory(f, f[j].fileName, file_count, level+1, j);
+            }
+            else{
+                if(strcmp(f[j].fileName, "/"))
+                    printf("L %s\n", filename);
+            }
+        }
+    }
+}
+
+/* retornar o nome do arquivo no formato /path/to/file */
+void get_filename(char *path, char *buffer){
+    char *last_slash = strrchr(path, '/');
+    
+    if (last_slash != NULL)
+        strcpy(buffer, last_slash + 1);
+    else
+        strcpy(buffer, path);
 }
 
 /* retornar o horario no formato DD/MM/YY HH:MM:SS */

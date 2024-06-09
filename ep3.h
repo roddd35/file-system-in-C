@@ -40,6 +40,7 @@ int erase_file(char* filename);
 int fileExists(char* filename);
 int create_file(char* filename, int isDir);
 int process_command(char* args[], int total_parameters);
+int contains_substring_and_slash(const char *string, const char *substring);
 
 void update_db();
 void print_status();
@@ -55,8 +56,11 @@ void set_bitmap(int block, int value);
 void initializeFileSystem(char* args[]);
 void update_access_time(char *filename);
 void save_file_info(FileInfo* fileInfo);
+void get_filename(char *path, char *buffer);
 void get_current_date_time(char* buffer, size_t size);
 void getDirectoryPath(char* filepath, char* directory);
+void print_directory(FileInfo f[], char dirName[], int file_count, int level, int currentIndex);
+void print_dir_tree();
 
 FileInfo set_file_config(char* filename, int isDir, int fi);
 
