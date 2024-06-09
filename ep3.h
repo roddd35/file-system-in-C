@@ -13,10 +13,11 @@
 #define FAT_EOF -1
 #define FILENAME_LENGTH 255
 #define TOTAL_BLOCKS 25600
-#define maxDir 1000 /* maximo de diretorios na arvore (db) */
-#define maxFiles 255 /* maximo de arquivos em cada diretorio na arvore (db) */
+#define maxDir 1000 /* maximo de diretorios na arvore db */
+#define maxFiles 255 /* maximo de arquivos em cada diretorio na arvore db */
 #define KB 1024
 #define maxBytesSize 4096
+#define standardBytesSize 327
 #define totalAvailableKB 102400
 
 // estruturas de dados
@@ -28,7 +29,14 @@ typedef struct{
     char creationTime[20];
     char modificationTime[20];
     char accessTime[20];
+    char content[maxBytesSize - standardBytesSize];
 }FileInfo;
+
+typedef struct{
+    char fileName[FILENAME_LENGTH];
+    int fat_block;
+    int is_directory;
+}shortFileInfo;
 
 // funcoes
 char* displayPrompt();
@@ -39,13 +47,13 @@ int erase_dir(char* dirname);
 int erase_file(char* filename);
 int fileExists(char* filename);
 int create_file(char* filename, int isDir);
+int copy_file(char* original_filename, char* filename);
 int process_command(char* args[], int total_parameters);
-int contains_substring_and_slash(const char *string, const char *substring);
 
 void update_db();
 void print_status();
+void print_dir_tree();
 void free_bitmap(int i);
-void imprime_diretorios();
 void unmount_file_system();
 void show_file(char* filename);
 void print_data(FileInfo fInfo);
@@ -59,11 +67,9 @@ void save_file_info(FileInfo* fileInfo);
 void get_filename(char *path, char *buffer);
 void get_current_date_time(char* buffer, size_t size);
 void getDirectoryPath(char* filepath, char* directory);
-void print_directory(FileInfo f[], char dirName[], int file_count, int level, int currentIndex);
-void print_dir_tree();
+void print_directory(shortFileInfo f[], char dirName[], int file_count, int level, int currentIndex);
 
 FileInfo set_file_config(char* filename, int isDir, int fi);
 
-// monta -> imprimir a arvore
 // copia origem destino (verificar o espaco livre antes de salvar o arquivo externo)
 // mostra arquivo

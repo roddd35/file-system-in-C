@@ -1,14 +1,5 @@
 #include "ep3.h"
 
-/* o bitmap tem tamanho TOTAL_BLOCKS / 8 
- * pois cada posição do vetor unsigned char
- * ocupa 1 byte (8 bits)
- * cada bit no bitmap representa um bloco de 4KB
- * como temos 25600 blocos, podemos armazenar
- * 25600 blocos * 4KB = 102400KB = 100MB
- * analogamente, 4KB * 3200bytes * 8 bits = 102400KB
- */
-
 /* 
  * bytesSize / 4096 retorna o numero de blocos desse arquivo 
  * quando esse valor for maior que o total_blocks, criar um 
@@ -17,6 +8,7 @@
  */
 
 int isSystemMounted = 0;
+int posicoesImpressas[TOTAL_BLOCKS];
 char* mount_file;
 
 char dirTree[maxDir][maxFiles][FILENAME_LENGTH];
@@ -50,7 +42,6 @@ int main(){
         command = NULL;
     }
 
-    // free(args);
     free(command);
 
     return 0;
@@ -99,10 +90,17 @@ int process_command(char* args[], int total_parameters){
             }
         }
 
+        else if(strcmp(args[0], "copia") == 0){
+            if(!fileExists(args[2])){
+                if(copy_file(args[1], args[2]))
+                    printf("Arquivo copiado!\n");
+            }
+        }
+
         /* mostrar informações de um arquivo */
-        // else if(strcmp(args[0], "mostra") == 0){
-        //     show_file(args[1]);
-        // }
+        else if(strcmp(args[0], "mostra") == 0){
+            show_file(args[1]);
+        }
 
         /* listar arquivos abaixo de um diretorio */
         else if(strcmp(args[0], "lista") == 0){
@@ -149,8 +147,8 @@ int process_command(char* args[], int total_parameters){
         else if(strcmp(args[0], "status") == 0)
             print_status();
 
-        else if(strcmp(args[0], "imprime") == 0)
-            imprime_diretorios();
+        /*  */
+
     }
     else
         printf("Por favor, monte um sistema de arquivos antes!\n");
@@ -203,7 +201,7 @@ void initializeFileSystem(char* args[]){
         fseek(file, -(TOTAL_BLOCKS*sizeof(int) + (TOTAL_BLOCKS/8)*sizeof(uint8_t)), SEEK_END);
         long new_file_size = ftell(file);
 
-        // fseek(file, 0, SEEK_END);
+        /* fseek(file, 0, SEEK_END); */
 
         fclose(file);
 
@@ -221,17 +219,26 @@ void print_dir_tree(){
     int file_count = 0, i;
     int file = open(mount_file, O_RDONLY);
     char filename[FILENAME_LENGTH];
-    FileInfo files[9999];
+    FileInfo aux;
+    shortFileInfo* files;
     if (file == -1) {
         perror("[ERRO]: abrir arquivo");
         return;
     }
 
-    for(i = 0; i < file_count; i++)
-        visited[i] = 0;
+    files = malloc(sizeof(shortFileInfo) * 10000000);
 
-    while(read(file, &files[file_count], sizeof(FileInfo)) > 0)
+    for(i = 0; i < file_count; i++){
+        visited[i] = 0;
+        posicoesImpressas[i] = 0;
+    }
+
+    while(read(file, &aux, sizeof(FileInfo)) > 0){
+        strcpy(files[file_count].fileName, aux.fileName);
+        files[file_count].is_directory = aux.is_directory;
+        files[file_count].fat_block = aux.fat_block;
         file_count++;
+    }
 
     close(file);
 
@@ -241,16 +248,19 @@ void print_dir_tree(){
             visited[i] = 1;
             if(strcmp(files[i].fileName, "/")){
                 get_filename(files[i].fileName, filename);
+                posicoesImpressas[files[i].fat_block] = 1;
                 printf("%s\n", filename);
             }
-            else
-                printf("%s\n", files[i].fileName);
+            else{
+                if(!posicoesImpressas[files[i].fat_block])
+                    printf("%s\n", files[i].fileName);
+            }
             print_directory(files, files[i].fileName, file_count, 1, i);
         }
     }
 }
 
-void print_directory(FileInfo f[], char dirName[], int file_count, int level, int currentIndex){
+void print_directory(shortFileInfo f[], char dirName[], int file_count, int level, int currentIndex){
     int i;
     int j;
     char path[FILENAME_LENGTH];
@@ -263,14 +273,17 @@ void print_directory(FileInfo f[], char dirName[], int file_count, int level, in
             for(i = 0; i < level && level > 1; i++)
                 printf("  ");
             get_filename(f[j].fileName, filename);
-            if(f[j].is_directory && strcmp(f[j].fileName, dirName) && strcmp(f[j].fileName, "") && !visited[j]){
+            if(f[j].is_directory && strcmp(f[j].fileName, dirName) && strcmp(f[j].fileName, "") && !visited[j] && !posicoesImpressas[f[j].fat_block]){
                 printf("L %s\n", filename);
+                posicoesImpressas[f[j].fat_block] = 1;
                 visited[j] = 1;
                 print_directory(f, f[j].fileName, file_count, level+1, j);
             }
             else{
-                if(strcmp(f[j].fileName, "/"))
+                if(strcmp(f[j].fileName, "/") && !posicoesImpressas[f[j].fat_block]){
                     printf("L %s\n", filename);
+                    posicoesImpressas[f[j].fat_block] = 1;
+                }
             }
         }
     }
@@ -307,55 +320,54 @@ void getDirectoryPath(char* filepath, char* directory) {
     strcpy(directory, "/");
 }
 
-/* imprimir os dados de um arquivo */
-// void show_file(char* filename){
-//     int i, j;
-//     FileInfo aux;
-//     char dir_path[256];
+/* imprimir o conteudo de um arquivo */
+void show_file(char* filename){
+    int i;
+    int file = open(mount_file, O_RDONLY);
+    FileInfo fInfo;
 
-//     getDirectoryPath(filename, dir_path);
-//     for(i = 0; i < total_dirs; i++){
-//         if(strcmp(dir_path, dirTree[i][0].fileName) == 0)
-//             break;
-//     }
+    for(i = 0; i < TOTAL_BLOCKS; i++)
+        posicoesImpressas[i] = 0;
 
-//     for(j = 0; j < dirTree[i][0].total_files_this_row; j++){
-//         if(strcmp(filename, dirTree[i][j].fileName) == 0){
-//             aux = dirTree[i][j];
-//             printf("%s\n", dirTree[i][j].fileName);
-//             if(!aux.is_directory)
-//                 printf("\tTamanho em bytes: %d\n", aux.bytesSize);
-//             printf("\tÚltimo acesso: %s\n", aux.accessTime);
-//             printf("\tData de criação: %s\n", aux.creationTime);
-//             printf("\tData de modificação: %s\n", aux.modificationTime);
-//         }
-//     }
-// }
+    while(read(file, &fInfo, sizeof(FileInfo)) > 0){
+        if(strcmp(fInfo.fileName, filename) == 0)
+            printf("%s", fInfo.content);
+    }
+    printf("\n");
+}
 
 /* imprimir de fato os dados da funcao abaixo */
 void print_data(FileInfo fInfo){
-    if(!fInfo.is_directory) {
-        printf("%s\n", fInfo.fileName);
-        printf("\tTamanho em bytes: %d\n", fInfo.bytesSize);
-    } 
-    else{
-        if(strcmp(fInfo.fileName, "/") == 0)
+    if(!posicoesImpressas[fInfo.fat_block]){
+        if(!fInfo.is_directory){
             printf("%s\n", fInfo.fileName);
-        else
-            printf("%s/\n", fInfo.fileName);
+            printf("\tTamanho em bytes: %d\n", fInfo.bytesSize);
+        } 
+        else{
+            if(strcmp(fInfo.fileName, "/") == 0)
+                printf("%s\n", fInfo.fileName);
+            else
+                printf("%s/\n", fInfo.fileName);
+        }
+        printf("\tÚltimo acesso: %s\n", fInfo.accessTime);
+        printf("\tHora de criação: %s\n", fInfo.creationTime);
+        printf("\tHora de modificação: %s\n", fInfo.modificationTime);
+
+        posicoesImpressas[fInfo.fat_block] = 1;
     }
-    printf("\tÚltimo acesso: %s\n", fInfo.accessTime);
-    printf("\tHora de criação: %s\n", fInfo.creationTime);
-    printf("\tHora de modificação: %s\n", fInfo.modificationTime);
 }
 
 /* imprimir os dados de um arquivo */
-void list_directory(char* dirname) {
+void list_directory(char* dirname){
+    int i;
     int file = open(mount_file, O_RDWR);
     if (file == -1) {
         perror("[ERRO]: abrir arquivo");
         return;
     }
+
+    for(i = 0; i < TOTAL_BLOCKS; i++)
+        posicoesImpressas[i] = 0;
 
     FileInfo fInfo;
     while (read(file, &fInfo, sizeof(FileInfo)) > 0) {
@@ -375,39 +387,24 @@ void list_directory(char* dirname) {
     close(file);
 }
 
-/* imprimir diretorios e o que esta dentro deles */
-void imprime_diretorios(){
-    int i, j;
-    for(i = 0; i < maxDir; i++){
-        if(strcmp(dirTree[i][0], "") == 0)
-            break;
-        if(strcmp(dirTree[i][0], "/"))
-            printf("%s/:\n", dirTree[i][0]);
-        else
-            printf("%s:\n", dirTree[i][0]);
-        for(j = 1; j < maxFiles; j++){
-            if(strcmp(dirTree[i][j], "") == 0)
-                break;
-            printf("\t%s\n", dirTree[i][j]);
-        }
-    }
-}
-
 /* define 0 ou 1 em uma posicao do bitmap */
 void set_bitmap(int block, int value){
     int byteIndex = block / 8;
     int bitIndex = block % 8;
     if(value)
-        bitmap[byteIndex] |= (1 << bitIndex); // marca como ocupado
+        bitmap[byteIndex] |= (1 << bitIndex); /* marca como ocupado */
     else
-        bitmap[byteIndex] &= ~(1 << bitIndex); // marca como livre
+        bitmap[byteIndex] &= ~(1 << bitIndex); /* marca como livre */
 }
 
 /* remover os blocos reservados a um arquivo na FAT */
 void free_fat_list(int i){
     int current_block = i;
 
-    while (fat[current_block] != -1){
+    if(fat[current_block] == 0)
+        return;
+
+    while (current_block != -1 && fat[current_block] != -1){
         int next_block = fat[current_block];
 
         set_bitmap(current_block, 0);
@@ -416,7 +413,7 @@ void free_fat_list(int i){
         current_block = next_block;
     }
 
-    if(fat[current_block] == -1)
+    if(current_block != -1)
         fat[current_block] = 0;
 }
 
@@ -482,6 +479,7 @@ void save_file_info(FileInfo* fileInfo){
     strcpy(f.accessTime, fileInfo->accessTime);
     strcpy(f.creationTime, fileInfo->creationTime);
     strcpy(f.modificationTime, fileInfo->modificationTime);
+    strcpy(f.content, fileInfo->content);
     f.fat_block = fileInfo->fat_block;
     f.bytesSize = fileInfo->bytesSize;
     f.is_directory = fileInfo->is_directory;
@@ -501,15 +499,15 @@ void update_access_time(char *filename){
 
     FileInfo fInfo;
 
-    while (read(file, &fInfo, sizeof(FileInfo)) > 0){
-        if (strcmp(fInfo.fileName, filename) == 0){
+    while(read(file, &fInfo, sizeof(FileInfo)) > 0){
+        if(strcmp(fInfo.fileName, filename) == 0){
             char acTime[20];
             get_current_date_time(acTime, sizeof(acTime));
             strncpy(fInfo.accessTime, acTime, sizeof(acTime));
             lseek(file, -sizeof(FileInfo), SEEK_CUR);
             write(file, &fInfo, sizeof(FileInfo));
-            close(file);
-            return;
+            // close(file);
+            // return;
         }
     }
 
@@ -565,7 +563,7 @@ void search_string(char* s){
             if(strcmp(dirTree[i][j], "") == 0)
                 break;
             substring = strstr(dirTree[i][j], s);
-            if (substring != NULL) {
+            if (substring != NULL){
                 printf("\t-> %s\n", dirTree[i][j]);
             }
         }
@@ -614,9 +612,10 @@ FileInfo set_file_config(char* filename, int isDir, int fi){
     strcpy(new_file.accessTime, new_file.creationTime);
     strcpy(new_file.modificationTime, new_file.creationTime);
     new_file.fat_block = fi;
+    strcpy(new_file.content, "");
 
     if(!isDir)
-        new_file.bytesSize = 327;
+        new_file.bytesSize = standardBytesSize;
     else
         new_file.bytesSize = 0;
     new_file.is_directory = isDir;
@@ -655,12 +654,12 @@ int erase_file(char* filename){
 
     FileInfo fInfo;
     
-    // copiar todos arquivos desejados para o arquivo auxiliar
+    /* copiar todos arquivos desejados para o arquivo auxiliar */
     while(read(readFile, &fInfo, sizeof(FileInfo)) > 0){
         if(strcmp(fInfo.fileName, filename) != 0)
             write(auxFile, &fInfo, sizeof(FileInfo)); 
         else
-            free_fat_list(fInfo.fat_block); // liberar tanto FAT como bitmap
+            free_fat_list(fInfo.fat_block); /* liberar tanto FAT como bitmap */
     }
 
     if (rename("aux", mount_file) == -1) {
@@ -730,6 +729,76 @@ int create_file(char* filename, int isDir){
     fat[file_index] = -1;
     bitmap[bitmap_index] = 1;
 
+    return 1;
+}
+
+/* copiar o arquivo original para o destino em filename */
+int copy_file(char* original_filename, char* filename){
+    int i;
+    int cont = 0;
+    ssize_t size;
+    FILE* file_f = fopen(original_filename, "r");
+
+    /* verificar se o arquivo cabe no sistema */
+    if (file_f == NULL) {
+        perror("[ERRO]: abrir arquivo com fopen");
+        fclose(file_f);
+        return 0;
+    }
+
+    fseek(file_f, 0L, SEEK_END);
+    size = ftell(file_f);
+    fseek(file_f, 0L, SEEK_SET);
+
+    for(i = 0; i < TOTAL_BLOCKS; i++){
+        if(fat[i] == 0)
+            cont += 1;
+    }
+
+    if(cont < size / ((maxBytesSize - standardBytesSize) + 1)){
+        printf("[ERRO]: espaço insuficiente!\n");
+        return 0;
+    }
+
+    fclose(file_f);
+
+    /* ler o arquivo a ser copiado e armazenar */
+    int nextFAT;
+    int original_file = open(original_filename, O_RDONLY);
+    int file = open(mount_file, O_RDWR | O_APPEND | O_CREAT, 0644);
+    char content[maxBytesSize - standardBytesSize];
+
+    if(original_file == -1 || file == -1){
+        perror("[ERRO]: abrir arquivo!");
+        return 0;
+    }
+
+    int firstFAT = find_free_FAT_position();
+    int currentFAT = firstFAT;
+    FileInfo fInfo = set_file_config(filename, 0, firstFAT);
+
+    set_bitmap(firstFAT, 1);
+    fat[firstFAT] = -1;
+
+    
+    while(read(original_file, content, sizeof(content)) > 0){
+        nextFAT = find_free_FAT_position();
+
+        set_bitmap(nextFAT, 1);
+        fat[currentFAT] = nextFAT;
+        fat[nextFAT] = -1;
+
+        strcpy(fInfo.content, content);
+        fInfo.bytesSize = size+standardBytesSize;
+
+        save_file_info(&fInfo);
+
+        currentFAT = nextFAT;
+    }
+
+    close(original_file);
+    close(file);
+    
     return 1;
 }
 

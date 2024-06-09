@@ -1,0 +1,93 @@
+AUTOR:
+	Rodrigo de Castro Michelassi
+	13672703
+	rodrigo.michelassi@usp.br
+
+OBS: Esse arquivo LEIAME possui um parágrafo por linha. Recomenda-se utilizar uma ferramenta que permita que as linhas sejam quebradas conforme o tamanho da tela do seu computador. No MAC, isso pode ser utilizado no VSCode utilizando [option + z]
+
+DESCRIÇÃO:
+
+	O programa ep3.c contém a implementação de um simulador de um sistema de arquivos. Esse simulador possui comandos pré-definidos para a realização de operações, e não possui tratamento de erros específicos para casos que o usuário forneça entradas incompatíveis com o que foi implementado. A seguir, explicaremos os detalhes de implementação e o que é esperado do usuário, em termos de entrada para o programa
+
+DETALHES DE IMPLEMENTAÇÃO:
+
+    O algoritmo implementado segue da criação de arquivos e diretórios, que podem ser representados de acordo com a seguinte estrutura de dados:
+
+        typedef struct{
+            char fileName[FILENAME_LENGTH];
+            int fat_block;
+            int bytesSize;
+            int is_directory;
+            char creationTime[20];
+            char modificationTime[20];
+            char accessTime[20];
+        }FileInfo;
+
+    Todos os valores definidos podem ser consultados no arquivo ep3.h.
+
+    Note que, para o programa, temos alguns comandos pré-definidos.
+
+    -> monta [arquivo]: ao executar esse comando, o sistema de arquivos irá ser iniciado para o arquivo [arquivo]. Se esse arquivo existir, ou seja, o sistema de arquivos já foi criado anteriormente, ele irá carregar a tabela FAT e o bitmap respectivo desses arquivos, e imprimir uma árvore de diretórios respectiva. Caso contrário, será iniciado um novo sistema de arquivos.
+        L Todo sistema de arquivos criado pelo programa tem como base o diretório "/", assim sendo, todos os arquivos devem ser criados em cima desse diretório, não havendo tratamento de erro para arquivos criados sem o prefixo "/".
+        L Todo sistema de arquivos é salvo em um arquivo binário de nome [arquivo], que fica salvo no disco, e todas as leituras e alterações são feitas a partir desse arquivo.
+        L A árvore de diretórios impressa está limitada a 1mi de arquivos. Note que, para conseguir esse número alto, foi necessário alocar a memória dinamicamente. Em nenhum teste tivemos problemas com segmentation fault, mas não podemos excluir essa possibilidade.
+
+    -> toca [arquivo]: cria um novo arquivo ou atualiza seu último tempo de acesso. O nome do arquivo informado deve seguir um padrão específico, tendo o prefixo "/". Caso queiramos criar um arquivo dentro de um diretório, podemos usar <toca /path/to/dir/file>, criando o arquivo [file] no diretório [path/to/dir].
+        L todo arquivo criado dessa forma ocupa, inicialmente, 387 bytes de memória, destinados a salvar seus metadados.
+
+    -> apaga [arquivo]: apaga um arquivo. Importante reiterar, que o nome do arquivo aqui também deve ser completo, i.e., ser informado com o caminho completo para o diretório.
+
+    -> criadir [diretorio]: cria um novo diretório. Assim como um arquivo regular, deve ser criado embaixo de "/", e se for criado embaixo de outro diretório, pode seguir a mesma estrutura do arquivo.
+
+    -> apagadir [diretorio]: apaga um diretório e todos arquivos abaixo dele. Importante reiterar, que o nome do diretório aqui também deve ser completo, i.e., ser informado com o caminho completo para o diretório.
+
+    -> copia [origem] [destino]: copia um arquivo do computador para o nosso sistema de arquivos, juntamente ao seu conteúdo. Note que o caminho deve ser completo para o conteudo (para obter o caminho completo, rode $ pwd no terminal no diretório onde o arquivo de texto puro se encontra). O destino deve ser no formato de arquivos discutido anteriormente, para o nosso sistema de arquivos.
+        L Para implementar isso, fazemos uma mesma copia do arquivo, com o mesmo nome, mesmas informações e ambos marcando a mesma primeira posição do arquivo na tabela FAT, porém cada cópia se limita a 4KB de conteúdo (que não é igual em cada cópia, a primeira cópia recebe os primeiros 4KB, a segunda cópia os próximos e assim por diante). Note que, como os metadados do arquivo ocupam algum espaço, o conteúdo não ocupa exatamente 4KB.
+        L Na prática, ocorre a criação de vários arquivos.
+
+    -> mostra [arquivo]: imprime o conteúdo de um arquivo.
+
+    -> lista [diretorio]: lista todos os arquivos e diretórios imediatamente abaixo do diretorio [diretorio]. Note que, se houver um diretório abaixo desse diretório, não irá imprimir recursivamente os itens abaixo desse.
+
+    -> atualizadb: cria uma estrutura de árvore na memória, que guardará o nome dos arquivos do sistema de arquivo. Essa estrutura tem tamanho fixo definido no arquivo ep3.h. Caso precise de mais espaço, os parâmetros maxDir e maxFiles devem ser modificados nesse arquivo.
+
+    -> busca [string]: retorna, a partir do banco de dados, todos os nomes que contenham a string [string] no nome. Esse comando só retorna uma saída caso o comando [atualizadb] tenha sido utilizado.
+        L para arquivos copiados com o comando <copia>, provavelmente todos os subarquivos criados de tamanho 4KB serão impressos também.
+
+    -> status: imprime informações sobre o sistema de arquivos.
+
+    -> desmonta: desmonta o sistema de arquivos, zerando a tabela FAT e o bitmap. É importante que, para todo sistema de arquivos simulado, se utilize esse comando ao fim da execução, caso contrário, o sistema de arquivos não poderá ser carregado novamente. SEMPRE UTILIZE O DESMONTA.
+
+    -> sai: sai do simulador.
+
+    A tabela FAT implementada é um vetor do tipo int, com 25600 posições disponíveis. Como o tipo int ocupa 32bits, então cada posição ocupa exatamente 4 bytes, representando 100MB de memória. O bitmap é do tipo uint8_t, sendo um inteiro de 8bits, então cada posição ocupa exatamente 1 byte. Assim, temos 3200 posições no bitmap.
+
+COMO EXECUTAR:
+
+	O programa recebido pode ser compilado utilizando o comando make. Vale lembrar que, para obter o make em uma máquina com Ubuntu, podemos rodar o seguinte comando no 
+terminal:
+
+		$ sudo apt-get update
+		$ sudo apt-get install make
+		
+	Com isso instalado, podemos ir ao diretório do programa e rodar
+	
+        $ make
+		$ ./ep3 {< entrada (opcional)}
+
+
+DEPENDÊNCIAS:
+	Para executar o arquivo .c é necessário, em uma máquina com Linux, utilizar o programa gcc. Para obte-lo digite no terminal:
+		
+		$ sudo apt-get update
+		$ sudo apt-get install gcc
+
+	Além disso, é necessário possuir o make em sua máquina. Para instalar essa ferramenta, use:
+	
+		$ sudo apt-get install make
+
+	Como valores de referência, esse programa foi feito em uma máquina virtual de terminal LIMA, com as seguintes especificações
+		Versão Ubuntu: Ubuntu 22.04
+		Processador/Chip: Apple M1 Pro
+		Memória Sistema: 16GB
+        aarch64 GNU/Linux
