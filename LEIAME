@@ -30,7 +30,7 @@ DETALHES DE IMPLEMENTAÇÃO:
     -> monta [arquivo]: ao executar esse comando, o sistema de arquivos irá ser iniciado para o arquivo [arquivo]. Se esse arquivo existir, ou seja, o sistema de arquivos já foi criado anteriormente, ele irá carregar a tabela FAT e o bitmap respectivo desses arquivos, e imprimir uma árvore de diretórios respectiva. Caso contrário, será iniciado um novo sistema de arquivos.
         L Todo sistema de arquivos criado pelo programa tem como base o diretório "/", assim sendo, todos os arquivos devem ser criados em cima desse diretório, não havendo tratamento de erro para arquivos criados sem o prefixo "/".
         L Todo sistema de arquivos é salvo em um arquivo binário de nome [arquivo], que fica salvo no disco, e todas as leituras e alterações são feitas a partir desse arquivo.
-        L A árvore de diretórios impressa está limitada a 1mi de arquivos. Note que, para conseguir esse número alto, foi necessário alocar a memória dinamicamente. Em nenhum teste tivemos problemas com segmentation fault, mas não podemos excluir essa possibilidade.
+        L A árvore de diretórios impressa está limitada a 1mi de arquivos. Note que, para conseguir esse número alto, foi necessário alocar a memória dinamicamente. Caso se crie um sistema de arquivos muito grande, será necessário alocar mais memória para evitar segmentation fault.
 
     -> toca [arquivo]: cria um novo arquivo ou atualiza seu último tempo de acesso. O nome do arquivo informado deve seguir um padrão específico, tendo o prefixo "/". Caso queiramos criar um arquivo dentro de um diretório, podemos usar <toca /path/to/dir/file>, criando o arquivo [file] no diretório [path/to/dir].
         L todo arquivo criado dessa forma ocupa, inicialmente, 387 bytes de memória, destinados a salvar seus metadados.
@@ -61,6 +61,29 @@ DETALHES DE IMPLEMENTAÇÃO:
     -> sai: sai do simulador.
 
     A tabela FAT implementada é um vetor do tipo int, com 25600 posições disponíveis. Como o tipo int ocupa 32bits, então cada posição ocupa exatamente 4 bytes, representando 100MB de memória. O bitmap é do tipo uint8_t, sendo um inteiro de 8bits, então cada posição ocupa exatamente 1 byte. Assim, temos 3200 posições no bitmap.
+
+
+RESULTADOS DOS TESTES:
+    OBS: Note que, ao testar carregando previamente arquivos de 10MB e 30MB, eventualmente o sistema de arquivos pode ficar lotado ao tentar preencher 30 níveis de hierarquia com 100 arquivos em cada, porque cada arquivo diferente criado com "toca" ocupa uma posição da FAT. Com isso em vista, os testes feitos não terão um resultado fiel a quantidade de arquivos pedida.
+
+    Para a cópia do arquivo de 1MB, usamos uma cópia do livro moby-dick em formato .txt, e copiamos esse arquivo diversas vezes também para obter o arquivo de 10MB e o arquivo de 30MB. Para criar os 30 níveis de diretórios preenchidos, usamos o arquivo generator.c (criado pelo Ivan e disponibilizado no fórum de dúvidas), onde cada nível criou 100 arquivos dentro (com as limitações mencionadas acima).
+
+    Um outro resultado observado, porém que não foi pedido, quando o sistema de arquivos já tem dados carregados, a criação de novos arquivos é mais lenta. Provavelmente porque, quanto mais arquivos temos carregados, mais demora a busca para saber se há espaço livre ou se um arquivo existe, antes da criação de um novo.
+    Seguem agora os resultados dos experimentos pedidos:
+
+                                | 0MB CARREGADOS | 10 MB CARREGADOS | 50 MB CARREGADOS
+    copia arquivo 1MB           | 0.396s         | 0.517s           | 0.898s
+    copia arquivo 10MB          | 0.380s         | 1.351s           | 4.568s
+    copia arquivo 30MB          | 3.688s         | 3.658s           | 4.498s
+    apaga arquivo 1MB           | 0.147s         | 1.228s           | 4.774s
+    apaga arquivo 10MB          | 10.578s        | 10.528s          | 13.448s
+    apaga arquivo 30MB          | 0.210s         | 0.339s           | 0.736s
+    remove 30 niveis vazio      | 0.024s         | 0.164s           | 0.373s
+    remove 30 niveis preenchido | 0.185s         | 0.307s           | 0.387s
+
+    Observando os resultados obtidos, podemos dizer que os resultados foram razoáveis. As operações de cópia e deleção de arquivos externos são as operações mais custosas, como esperado, e o tempo de deleção desses arquivos se mostrou crescente a depender da quantidade de armazenamento estava disponível.
+    OBS VER AMANHA SE TA CERTO OS ULTIMOS DOIS e tirar o comentario do pstree pra gravar o video
+
 
 COMO EXECUTAR:
 

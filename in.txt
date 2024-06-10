@@ -1,5 +1,0 @@
-monta l
-copia /Users/rodrigomichelassi/Downloads/mobydick1 /mobydick1
-mostra /mobydick1
-desmonta
-sai

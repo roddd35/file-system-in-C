@@ -146,9 +146,6 @@ int process_command(char* args[], int total_parameters){
         /* imprimir os status do sistema de arquivos */
         else if(strcmp(args[0], "status") == 0)
             print_status();
-
-        /*  */
-
     }
     else
         printf("Por favor, monte um sistema de arquivos antes!\n");
