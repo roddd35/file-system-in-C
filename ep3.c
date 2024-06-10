@@ -207,7 +207,7 @@ void initializeFileSystem(char* args[]){
             exit(1);
         }
 
-        print_dir_tree();
+        // print_dir_tree();
     }
 }
 
@@ -687,6 +687,10 @@ int erase_dir(char* dirname){
             write(auxFile, &fInfo, sizeof(FileInfo));
         else{
             free_fat_list(fInfo.fat_block);
+            if(!erase_file(fInfo.fileName)){
+                printf("[ERRO]: apagar arquivo");
+                return 0;
+            }
             printf("[-] %s\n", fInfo.fileName);
         }
     }
